@@ -1,0 +1,81 @@
+# pyECOD Mini Configuration Template
+# Copy this file to config.local.yml and fill in your values
+# NEVER commit config.local.yml - it contains passwords!
+
+# ============================================================================
+# DATABASE CONFIGURATION
+# ============================================================================
+database:
+  # PostgreSQL connection for ECOD production database
+  host: dione
+  port: 45000
+  database: ecod_protein
+  user: ecod
+  # Read password from environment variable for security
+  password_env: ECOD_DB_PASSWORD  # export ECOD_DB_PASSWORD="your_password"
+
+# ============================================================================
+# FILE PATHS
+# ============================================================================
+paths:
+  # Base directory for ECOD batch files
+  batch_base_dir: /data/ecod/pdb_updates/batches
+
+  # Reference data files
+  data_dir: ./data
+  domain_lengths: ./data/domain_lengths.csv
+  protein_lengths: ./data/protein_lengths.csv
+  domain_definitions: ./data/domain_definitions.csv
+  reference_blacklist: ./data/reference_blacklist.csv
+
+  # Production output
+  output_base_dir: /data/ecod/mini_v2_results
+  tracking_db: /data/ecod/mini_v2/tracking.db
+  log_dir: /data/ecod/mini_v2/logs
+
+# ============================================================================
+# SLURM CONFIGURATION
+# ============================================================================
+slurm:
+  # SLURM cluster settings
+  partition: All
+  time: "1:00:00"       # Time limit per job
+  memory: 4G            # Memory per job
+  cpus_per_task: 1
+
+  # Job management
+  max_concurrent_jobs: 50
+  job_script_dir: /tmp/pyecod_mini_jobs
+  log_dir: /tmp/pyecod_mini_logs
+
+  # Environment setup
+  env_setup_script: ~/.bashrc  # Script to source before running jobs
+  work_dir: /home/rschaeff/dev/pyecod_mini
+
+# ============================================================================
+# PROCESSING OPTIONS
+# ============================================================================
+processing:
+  # Filter options
+  reps_only: true           # Only process representative proteins
+  skip_existing: true       # Skip proteins with existing output
+
+  # Retry settings
+  max_retries: 2
+  retry_delay: 300          # Seconds between retries
+
+  # Batch processing
+  batch_size: 50            # Proteins per batch
+  throttle_delay: 0.1       # Seconds between job submissions
+
+# ============================================================================
+# QUALITY CONTROL
+# ============================================================================
+quality:
+  # Minimum quality thresholds
+  min_coverage: 0.5         # Minimum sequence coverage
+  min_confidence: 0.6       # Minimum evidence confidence
+  require_reference_lengths: true
+
+  # Import filtering
+  import_quality_threshold: good  # good, questionable, or all
