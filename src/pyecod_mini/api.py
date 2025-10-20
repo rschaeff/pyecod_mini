@@ -51,6 +51,7 @@ def partition_protein(
     pdb_id: str,
     chain_id: str,
     batch_id: Optional[str] = None,
+    blast_dir: Optional[str] = None,
 ) -> PartitionResult:
     """
     Partition a protein into domains using evidence from domain_summary.xml.
@@ -64,6 +65,8 @@ def partition_protein(
         pdb_id: PDB ID
         chain_id: Chain ID
         batch_id: Optional batch ID for tracking
+        blast_dir: Optional path to directory containing BLAST XML files
+                   (enables chain BLAST decomposition with alignment data)
 
     Returns:
         PartitionResult with domains, coverage, and metadata
@@ -78,6 +81,7 @@ def partition_protein(
         ...     output_xml="/path/to/8abc_A.partition.xml",
         ...     pdb_id="8abc",
         ...     chain_id="A",
+        ...     blast_dir="/path/to/blast",  # Optional: enables chain BLAST
         ... )
         >>> print(f"Found {len(result.domains)} domains, {result.coverage:.1%} coverage")
     """
@@ -119,6 +123,7 @@ def partition_protein(
             visualize=False,
             summary_xml=summary_xml,
             output_path=output_xml,
+            blast_dir=blast_dir,  # Pass BLAST directory for alignment data
         )
 
         # Check if partitioning succeeded

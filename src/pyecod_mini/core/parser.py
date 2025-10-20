@@ -38,7 +38,9 @@ def extract_pdb_chain_robust(
     Robustly extract pdb_id and chain_id from domain_id using lookup first, fallback parsing second
 
     Args:
-        domain_id: Domain identifier (e.g., "e6dgvA1", "d2ia4B2")
+        domain_id: Domain identifier - supports multiple formats:
+            - ECOD domain ID: "e6dgvA1", "d2ia4B2"
+            - Chain format: "6ces_A", "1abc_B"
         domain_lookup: Lookup table from create_domain_id_lookup()
 
     Returns:
@@ -52,6 +54,15 @@ def extract_pdb_chain_robust(
     source_pdb = ""
     chain_id = ""
 
+    # Check if it's in "pdb_chain" format (e.g., "6ces_A", "1abc_B")
+    if "_" in domain_id:
+        parts = domain_id.split("_")
+        if len(parts) >= 2:
+            source_pdb = parts[0]
+            chain_id = parts[1]
+            return source_pdb, chain_id
+
+    # Otherwise try ECOD domain ID format
     if len(domain_id) > 4:
         # Common format: "e6dgvA1" -> pdb="6dgv", chain="A"
         source_pdb = domain_id[1:5]
@@ -125,7 +136,211 @@ def parse_domain_summary(
 
     skipped_chain_blast = []
 
-    # Parse chain BLAST hits
+    # Try API spec format first (<evidence><hit type="...">)
+    api_spec_hits = root.findall(".//evidence/hit")
+    if api_spec_hits:
+        # Parse unified evidence format from API spec
+        for hit in api_spec_hits:
+            hit_type = hit.get("type", "")
+            if not hit_type:
+                continue
+
+            if hit_type == "chain_blast":
+                # Parse chain BLAST in API spec format
+                target = hit.get("target", "")  # e.g., "e1suaA1"
+                if not target:
+                    continue
+
+                # Extract PDB/chain from target (ECOD domain ID)
+                pdb_id, chain_id = extract_pdb_chain_robust(target, domain_lookup)
+
+                query_range_str = hit.get("query_range", "")
+                if not query_range_str:
+                    continue
+
+                try:
+                    evalue = float(hit.get("evalue", "999"))
+
+                    # Get protein length for chain BLAST
+                    reference_length = None
+                    if protein_lengths:
+                        pdb_lower = pdb_id.lower()
+                        lookup_keys = [
+                            (pdb_lower, chain_id),
+                            (pdb_id, chain_id),
+                            f"{pdb_lower}_{chain_id}",
+                            f"{pdb_id}_{chain_id}",
+                        ]
+                        for key in lookup_keys:
+                            if key in protein_lengths:
+                                reference_length = protein_lengths[key]
+                                break
+
+                    if require_reference_lengths and reference_length is None:
+                        skipped_chain_blast.append(f"{pdb_id}_{chain_id}")
+                        skipped_counts["no_reference_length"] += 1
+                        continue
+
+                    evidence = Evidence(
+                        type="chain_blast",
+                        source_pdb=pdb_id,
+                        query_range=SequenceRange.parse(query_range_str),
+                        evalue=evalue,
+                        domain_id=target,
+                    )
+
+                    evidence = populate_evidence_provenance(
+                        evidence=evidence,
+                        alignment=blast_alignments.get((pdb_id, chain_id)),
+                        reference_length=reference_length,
+                    )
+
+                    is_valid, validation_issues = validate_evidence_provenance(evidence)
+                    if not is_valid:
+                        skipped_counts["validation_failed"] = skipped_counts.get("validation_failed", 0) + 1
+                        if verbose:
+                            print(f"  Warning: Evidence validation failed: {validation_issues}")
+                        continue
+
+                    if blast_alignments and (pdb_id, chain_id) in blast_alignments:
+                        evidence.alignment = blast_alignments[(pdb_id, chain_id)]
+
+                    evidence_list.append(evidence)
+                    evidence_counts["chain_blast"] += 1
+
+                except Exception as e:
+                    skipped_counts["parse_error"] += 1
+                    if verbose:
+                        print(f"  Warning: Failed to parse chain BLAST hit {target}: {e}")
+
+            elif hit_type == "domain_blast":
+                # Parse domain BLAST in API spec format
+                target = hit.get("target", "")  # ECOD domain ID
+                if not target:
+                    continue
+
+                source_pdb, chain_id = extract_pdb_chain_robust(target, domain_lookup)
+
+                query_range_str = hit.get("query_range", "")
+                target_range_str = hit.get("target_range", "")
+
+                if not query_range_str:
+                    continue
+
+                try:
+                    query_range = SequenceRange.parse(query_range_str)
+                    hit_range = SequenceRange.parse(target_range_str) if target_range_str else None
+
+                    reference_length = None
+                    if reference_lengths:
+                        if target in reference_lengths:
+                            reference_length = reference_lengths[target]
+                        elif source_pdb in reference_lengths:
+                            reference_length = reference_lengths[source_pdb]
+                        elif target.startswith("e") and target[1:] in reference_lengths:
+                            reference_length = reference_lengths[target[1:]]
+
+                    if require_reference_lengths and not reference_length:
+                        if verbose:
+                            print(f"  Skipping {target}: no reference length available")
+                        skipped_counts["no_reference_length"] += 1
+                        continue
+
+                    evalue = float(hit.get("evalue", "999"))
+
+                    evidence = Evidence(
+                        type="domain_blast",
+                        source_pdb=source_pdb,
+                        query_range=query_range,
+                        domain_id=target,
+                        evalue=evalue,
+                    )
+
+                    evidence = populate_evidence_provenance(
+                        evidence=evidence,
+                        hit_range=hit_range,
+                        reference_length=reference_length,
+                    )
+
+                    is_valid, validation_issues = validate_evidence_provenance(evidence)
+                    if not is_valid:
+                        skipped_counts["validation_failed"] = skipped_counts.get("validation_failed", 0) + 1
+                        if verbose:
+                            print(f"  Warning: Evidence validation failed: {validation_issues}")
+                        continue
+
+                    evidence_list.append(evidence)
+                    evidence_counts["domain_blast"] += 1
+
+                except Exception as e:
+                    skipped_counts["parse_error"] += 1
+                    if verbose:
+                        print(f"  Warning: Failed to parse domain BLAST hit {target}: {e}")
+
+            elif hit_type == "hhsearch":
+                # Parse HHsearch in API spec format
+                target = hit.get("target", "")
+                if not target:
+                    continue
+
+                source_pdb, chain_id = extract_pdb_chain_robust(target, domain_lookup)
+
+                query_range_str = hit.get("query_range", "")
+                if not query_range_str:
+                    continue
+
+                try:
+                    reference_length = None
+                    if reference_lengths:
+                        if target in reference_lengths:
+                            reference_length = reference_lengths[target]
+                        elif source_pdb in reference_lengths:
+                            reference_length = reference_lengths[source_pdb]
+                        elif target.startswith("e") and target[1:] in reference_lengths:
+                            reference_length = reference_lengths[target[1:]]
+
+                    if require_reference_lengths and not reference_length:
+                        if verbose:
+                            print(f"  Skipping HHSearch {target}: no reference length available")
+                        skipped_counts["no_reference_length"] += 1
+                        continue
+
+                    evidence = Evidence(
+                        type="hhsearch",
+                        source_pdb=source_pdb,
+                        query_range=SequenceRange.parse(query_range_str),
+                        domain_id=target,
+                        evalue=float(hit.get("evalue", "999")),
+                    )
+
+                    evidence = populate_evidence_provenance(
+                        evidence=evidence, reference_length=reference_length
+                    )
+
+                    # Parse probability for confidence calculation
+                    prob = float(hit.get("probability", "0"))
+                    evidence.confidence = calculate_evidence_confidence(
+                        probability=prob,
+                        evidence_type="hhsearch",
+                        alignment_coverage=evidence.alignment_coverage,
+                    )
+
+                    is_valid, validation_issues = validate_evidence_provenance(evidence)
+                    if not is_valid:
+                        skipped_counts["validation_failed"] = skipped_counts.get("validation_failed", 0) + 1
+                        if verbose:
+                            print(f"  Warning: Evidence validation failed: {validation_issues}")
+                        continue
+
+                    evidence_list.append(evidence)
+                    evidence_counts["hhsearch"] += 1
+
+                except Exception as e:
+                    skipped_counts["parse_error"] += 1
+                    if verbose:
+                        print(f"  Warning: Failed to parse HHSearch hit {target}: {e}")
+
+    # LEGACY FORMAT: Parse chain BLAST hits (old format)
     for hit in root.findall(".//chain_blast_run/hits/hit"):
         pdb_id = hit.get("pdb_id", "")
         chain_id = hit.get("chain_id", "")

@@ -159,18 +159,26 @@ def load_chain_blast_alignments(
     """
     import os
 
-    # Construct expected filename
-    blast_file = os.path.join(blast_dir, f"{pdb_id}_{chain_id}.develop291.xml")
+    # Try multiple naming conventions
+    filename_patterns = [
+        f"{pdb_id}_{chain_id}.chain_blast.xml",  # pyecod_prod format
+        f"{pdb_id}_{chain_id}.develop291.xml",    # pyecod_mini batch format
+        f"{pdb_id.upper()}_{chain_id}.develop291.xml",  # uppercase variant
+        f"{pdb_id}_{chain_id}.chain.blast.xml",   # alternate format
+    ]
 
-    if not os.path.exists(blast_file):
-        # Try alternate naming conventions
-        blast_file_upper = os.path.join(blast_dir, f"{pdb_id.upper()}_{chain_id}.develop291.xml")
-        if os.path.exists(blast_file_upper):
-            blast_file = blast_file_upper
-        else:
-            if verbose:
-                print(f"BLAST file not found: {blast_file}")
-            return {}
+    blast_file = None
+    for pattern in filename_patterns:
+        candidate = os.path.join(blast_dir, pattern)
+        if os.path.exists(candidate):
+            blast_file = candidate
+            break
+
+    if not blast_file:
+        if verbose:
+            print(f"BLAST file not found in {blast_dir}")
+            print(f"  Tried patterns: {', '.join(filename_patterns)}")
+        return {}
 
     return parse_blast_xml(blast_file, verbose=verbose)
 

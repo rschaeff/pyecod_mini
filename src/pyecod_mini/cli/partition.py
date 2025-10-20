@@ -34,6 +34,7 @@ def partition_protein(
     visualize: bool = False,
     summary_xml: Optional[str] = None,
     output_path: Optional[str] = None,
+    blast_dir: Optional[str] = None,
 ) -> Optional[list]:
     """Partition domains for a single protein with enhanced provenance tracking
 
@@ -45,6 +46,8 @@ def partition_protein(
         visualize: Generate PyMOL visualization
         summary_xml: Optional path to custom summary XML (overrides batch detection)
         output_path: Optional path to custom output XML (overrides batch detection)
+        blast_dir: Optional path to directory containing BLAST XML files
+                    (enables chain BLAST decomposition with alignment data)
     """
 
     try:
@@ -54,6 +57,14 @@ def partition_protein(
         # but still need reference files from config
         if summary_xml:
             # Use custom paths without batch detection
+            # Determine BLAST directory
+            if blast_dir:
+                # Explicitly provided
+                blast_path = Path(blast_dir)
+            else:
+                # Infer from summary_xml path
+                blast_path = Path(summary_xml).parent.parent / "blast"
+
             paths = {
                 'domain_summary': Path(summary_xml),
                 'output': Path(output_path) if output_path else Path(f"/tmp/{protein_id}.domains.xml"),
@@ -64,8 +75,8 @@ def partition_protein(
                 'protein_lengths': config.protein_lengths_file,
                 'domain_definitions': config.domain_definitions_file,
                 # Optional BLAST files (may not exist)
-                'blast_xml': Path(summary_xml).parent.parent / "blast" / f"{protein_id}.chain.blast.xml" if summary_xml else Path("/dev/null"),
-                'blast_dir': Path(summary_xml).parent.parent / "blast" if summary_xml else Path("/tmp"),
+                'blast_xml': blast_path / f"{protein_id}.chain.blast.xml",
+                'blast_dir': blast_path,
             }
         else:
             # Get all paths with smart batch detection
@@ -118,7 +129,7 @@ def partition_protein(
 
         # Load BLAST alignments (optional but needed for accurate decomposition)
         blast_alignments = {}
-        if paths["blast_xml"].exists():
+        if paths["blast_dir"].exists():
             # Parse protein ID
             parts = protein_id.split("_")
             pdb_id, chain_id = parts[0], parts[1] if len(parts) > 1 else "A"
@@ -130,7 +141,7 @@ def partition_protein(
                 print(f"Loaded {len(blast_alignments)} BLAST alignments")
         else:
             if verbose:
-                print("WARNING: BLAST XML not found - alignment-based decomposition disabled")
+                print("WARNING: BLAST directory not found - alignment-based decomposition disabled")
 
         # Parse evidence
         if verbose:
@@ -177,12 +188,27 @@ def partition_protein(
         for etype, count in sorted(evidence_by_type.items()):
             print(f"  {etype}: {count}")
 
-        # Estimate sequence length
-        max_pos = max(ev.query_range.segments[-1].end for ev in evidence)
-        sequence_length = int(max_pos * 1.1)
+        # Read sequence length from summary XML (NOT estimated from evidence!)
+        import xml.etree.ElementTree as ET
+        try:
+            tree = ET.parse(str(paths["domain_summary"]))
+            root = tree.getroot()
+            protein_elem = root.find("protein")
 
-        if verbose:
-            print(f"Estimated sequence length: {sequence_length}")
+            if protein_elem is not None and protein_elem.get("length"):
+                sequence_length = int(protein_elem.get("length"))
+                if verbose:
+                    print(f"Sequence length from summary XML: {sequence_length}")
+            else:
+                # Fallback: estimate from evidence (old behavior)
+                max_pos = max(ev.query_range.segments[-1].end for ev in evidence)
+                sequence_length = int(max_pos * 1.1)
+                print(f"WARNING: Could not read sequence length from summary XML, estimating: {sequence_length}")
+        except Exception as e:
+            # Fallback: estimate from evidence (old behavior)
+            max_pos = max(ev.query_range.segments[-1].end for ev in evidence)
+            sequence_length = int(max_pos * 1.1)
+            print(f"WARNING: Error reading summary XML length ({e}), estimating: {sequence_length}")
 
         # Show decomposition readiness
         chain_blast_count = evidence_by_type.get("chain_blast", 0)

@@ -379,35 +379,28 @@ def _separate_evidence_by_type(
 
 
 def _sort_evidence_by_priority(evidence_list: list["Evidence"]) -> list["Evidence"]:
-    """Sort evidence by confidence, e-value, and other factors"""
+    """
+    Sort evidence by query coverage first (greedy best-coverage-first strategy).
+
+    CRITICAL: In a greedy algorithm, processing order determines final coverage.
+    Prioritize evidence covering the MOST query residues to maximize total coverage.
+
+    Sort order:
+    1. Query coverage (most residues first) - prevents local optimum traps
+    2. E-value (best first) - reliability within same coverage
+    3. Confidence (highest first) - tiebreaker
+    """
 
     def evidence_sort_key(e):
-        # Calculate tie-breaking score
-        tiebreak_score = 0
-
-        # Prefer evidence with alignment data
-        if hasattr(e, "alignment") and e.alignment is not None:
-            tiebreak_score += 10
-
-        # Prefer evidence with higher coverage
-        if e.alignment_coverage is not None:
-            tiebreak_score += e.alignment_coverage * 5
-
-        # Prefer discontinuous ranges for complex domains
-        if e.query_range.is_discontinuous:
-            tiebreak_score += 2
-
-        # Prefer evidence with reference length
-        if e.reference_length is not None:
-            tiebreak_score += 1
+        # PRIMARY: Number of query positions covered (most first)
+        query_positions = len(e.get_positions()) if hasattr(e, 'get_positions') else 0
 
         return (
-            -e.confidence,  # Higher confidence first
-            e.evalue if e.evalue else 999,  # Lower e-value first
-            -tiebreak_score,  # Higher tiebreak score first
+            -query_positions,  # MOST QUERY COVERAGE FIRST (prevents local optimum)
+            e.evalue if e.evalue else 999,  # Lower e-value first (reliability)
+            -e.confidence,  # Higher confidence as tiebreaker
             e.source_pdb or "",  # Alphabetical by PDB
             e.domain_id or "",  # Alphabetical by domain ID
-            str(e.query_range),  # Range as final tie-breaker
         )
 
     return sorted(evidence_list, key=evidence_sort_key)
@@ -477,6 +470,21 @@ def _process_chain_blast_evidence(
         decomposition_stats["decomposed"] += 1
 
         for _i, dec_evidence in enumerate(decomposed_evidence):
+            # Apply quality thresholds to decomposed evidence
+            # Reject poor-quality decomposed domains (candidate for new representative)
+            if dec_evidence.reference_length and dec_evidence.hit_range:
+                ref_coverage = dec_evidence.hit_range.total_length / dec_evidence.reference_length
+
+                # Use same thresholds as EVIDENCE_THRESHOLDS["chain_blast_decomposed"]
+                if ref_coverage < 0.5 or dec_evidence.confidence < 0.5:
+                    if verbose:
+                        print(f"  ✗ Rejected decomposed domain: {dec_evidence.domain_id}")
+                        print(f"     Reference coverage: {ref_coverage:.1%} (threshold: 50%)")
+                        print(f"     Confidence: {dec_evidence.confidence:.3f} (threshold: 0.50)")
+                        print(f"     → Candidate for new representative")
+                    decomposition_stats["rejected_poor_quality"] = decomposition_stats.get("rejected_poor_quality", 0) + 1
+                    continue  # Skip this decomposed domain
+
             classification = get_evidence_classification(dec_evidence, domain_definitions)
 
             get_domain_family_name(dec_evidence, classification)
