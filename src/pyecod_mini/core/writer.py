@@ -254,6 +254,8 @@ def write_domain_partition(
                 if ref_coverage is not None:
                     evidence_elem.set("reference_coverage", f"{ref_coverage:.3f}")
                     evidence_elem.set("reference_coverage_percent", f"{ref_coverage:.1%}")
+            else:
+                ref_coverage = None
 
             # Reference length for context
             if evidence.reference_length:

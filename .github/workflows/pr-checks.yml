@@ -1,0 +1,84 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  quick-tests:
+    name: Quick PR Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for better diffs
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run fast unit tests only
+        run: |
+          pytest tests/ \
+            -m "unit and not slow" \
+            -n auto \
+            --maxfail=3 \
+            -v \
+            --tb=line
+
+      - name: Quick lint check
+        run: |
+          ruff check src/ tests/ --select F,E
+        continue-on-error: true
+
+      - name: Check test file naming
+        run: |
+          # Ensure all test files start with test_
+          if find tests/ -name "*.py" ! -name "test_*.py" ! -name "conftest.py" ! -name "__init__.py" | grep -q .; then
+            echo "::error::Found test files not starting with 'test_'"
+            exit 1
+          fi
+
+      - name: PR size check
+        run: |
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | wc -l)
+          echo "Files changed: $CHANGED_FILES"
+
+          if [ $CHANGED_FILES -gt 50 ]; then
+            echo "::warning::This PR changes $CHANGED_FILES files. Consider breaking it into smaller PRs."
+          fi
+
+  new-test-check:
+    name: Verify New Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if tests were added
+        run: |
+          # Get changed files
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+
+          # Check if source files were changed
+          SRC_CHANGES=$(echo "$CHANGED_FILES" | grep "^src/" || true)
+
+          # Check if test files were changed
+          TEST_CHANGES=$(echo "$CHANGED_FILES" | grep "^tests/" || true)
+
+          if [ -n "$SRC_CHANGES" ] && [ -z "$TEST_CHANGES" ]; then
+            echo "::warning::Source code was modified but no tests were added or updated."
+            echo "::warning::Consider adding tests for your changes."
+          fi
