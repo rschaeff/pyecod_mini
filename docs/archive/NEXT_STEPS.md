@@ -3,12 +3,20 @@
 **Date**: 2025-10-19
 **Current Status**: 📋 Planning Complete
 
+## Important: Separation of Concerns
+
+**This repository contains the domain partitioning ALGORITHM only.**
+
+Production infrastructure (SLURM, batch orchestration, BLAST/HHsearch execution) lives in the separate **pyecod_prod** repository.
+
+**See**: [PYECOD_MINI_API_SPEC.md](PYECOD_MINI_API_SPEC.md) for the formal API contract between pyecod_mini and pyecod_prod.
+
 ## What We've Accomplished
 
 ✅ **Complete Planning Documentation**:
 1. [EXTRACTION_PLAN.md](EXTRACTION_PLAN.md) - Detailed roadmap for extracting mini from legacy repo
 2. [ALGORITHM_VALIDATION.md](ALGORITHM_VALIDATION.md) - Comprehensive validation strategy
-3. [PRODUCTION_DESIGN.md](PRODUCTION_DESIGN.md) - Production framework architecture
+3. [PYECOD_MINI_API_SPEC.md](PYECOD_MINI_API_SPEC.md) - Formal API specification for integration with pyecod_prod
 4. [README.md](README.md) - Project overview and quick start
 
 ## Immediate Next Steps
@@ -19,25 +27,20 @@
 
 **Tasks**:
 ```bash
-# 1. Create directory structure
-mkdir -p src/pyecod_mini/{core,cli,production}
-mkdir -p tests data scripts docs config
+# 1. Create directory structure (NO production/ - that's in pyecod_prod)
+mkdir -p src/pyecod_mini/{core,cli}
+mkdir -p tests data scripts docs
 
 # 2. Create __init__.py files
 touch src/pyecod_mini/__init__.py
 touch src/pyecod_mini/core/__init__.py
 touch src/pyecod_mini/cli/__init__.py
-touch src/pyecod_mini/production/__init__.py
 touch tests/__init__.py
 
 # 3. Create pyproject.toml
 # (Copy from EXTRACTION_PLAN.md section 1.2)
 
-# 4. Create configuration templates
-cp config.template.yml config/config.template.yml
-# Edit with production settings
-
-# 5. Initialize git repository
+# 4. Initialize git repository (if not already done)
 git init
 git add .
 git commit -m "Initial repository structure"
@@ -300,211 +303,241 @@ python scripts/validate_algorithm.py --proteins test_proteins_100.txt --report v
 
 ---
 
-### Step 7: Production Framework Implementation (Days 7-10)
+### Step 7: Implement Library API (Day 7)
 
-**Goal**: Build production components per PRODUCTION_DESIGN.md
+**Goal**: Implement public library API per PYECOD_MINI_API_SPEC.md
 
-#### 7A. Scanner Component (Day 7)
-
-```python
-# src/pyecod_mini/production/scanner.py
-# Implement:
-# - ProteinTask dataclass
-# - ScanResult dataclass
-# - BatchScanner class
-
-# Test with:
-pytest tests/test_production.py::test_scanner -v
-```
-
-#### 7B. SLURM Manager (Day 8)
+#### 7A. Create Public API Module
 
 ```python
-# src/pyecod_mini/production/slurm_manager.py
-# Implement:
-# - SlurmJob dataclass
-# - JobBatch dataclass
-# - SlurmManager class
+# src/pyecod_mini/__init__.py
+"""
+pyecod_mini - Domain partitioning algorithm for ECOD.
 
-# Test with small batch:
-pytest tests/test_production.py::test_slurm_manager -v
+Public API for integration with pyecod_prod and other tools.
+"""
+
+from .api import partition_protein, PartitionResult, Domain, PartitionError
+
+__version__ = "1.0.0"
+__all__ = ["partition_protein", "PartitionResult", "Domain", "PartitionError"]
 ```
 
-#### 7C. Tracking Database (Day 8)
+#### 7B. Implement partition_protein Function
 
 ```python
-# src/pyecod_mini/production/tracking_db.py
-# Implement:
-# - SQLite schema
-# - TrackingDatabase class
+# src/pyecod_mini/api.py
+"""
+Public API for pyecod_mini domain partitioning.
 
-# Test:
-pytest tests/test_production.py::test_tracking_db -v
+See PYECOD_MINI_API_SPEC.md for complete specification.
+"""
+
+from pathlib import Path
+from typing import Optional
+from dataclasses import dataclass
+import datetime
+
+def partition_protein(
+    summary_xml: str | Path,
+    output_xml: str | Path | None = None,
+    *,
+    pdb_id: str | None = None,
+    chain_id: str | None = None,
+    batch_id: str | None = None,
+    verbose: bool = False,
+) -> PartitionResult:
+    """
+    Partition a protein chain into domains based on evidence.
+
+    See PYECOD_MINI_API_SPEC.md for complete documentation.
+    """
+    # Implementation delegates to existing core modules
+    pass
+
+@dataclass
+class PartitionResult:
+    """Result from domain partitioning (see API spec)."""
+    pdb_id: str
+    chain_id: str
+    sequence_length: int
+    sequence: str
+    domains: list[Domain]
+    coverage: float
+    algorithm_version: str
+    success: bool
+    error_message: Optional[str] = None
+    batch_id: Optional[str] = None
+    timestamp: Optional[str] = None
+
+@dataclass
+class Domain:
+    """A partitioned domain (see API spec)."""
+    domain_id: str
+    range_string: str
+    residue_count: int
+    ecod_domain_id: str
+    family_name: str
+    source: str
+    confidence: Optional[float] = None
+
+class PartitionError(Exception):
+    """Raised when domain partitioning fails."""
+    pass
 ```
 
-#### 7D. Monitor (Day 9)
+#### 7C. Update XML Writer
+
+Modify `core/writer.py` to output partition.xml format per spec:
+- Include `<coverage>` element
+- Include `algorithm_version` attribute
+- Follow exact schema from PYECOD_MINI_API_SPEC.md
+
+#### 7D. Test Library API
 
 ```python
-# src/pyecod_mini/production/monitor.py
-# Implement:
-# - ProcessingStats dataclass
-# - ProductionMonitor class (with Rich dashboard)
+# tests/test_api.py
+"""Test public library API."""
 
-# Manual test:
-python -m pyecod_mini.production.monitor --test-mode
+from pyecod_mini import partition_protein, PartitionError
+
+def test_partition_protein_success():
+    """Test successful partitioning via library API."""
+    result = partition_protein(
+        summary_xml="tests/data/8ovp_A.summary.xml",
+        output_xml="tests/output/8ovp_A.partition.xml"
+    )
+
+    assert result.success
+    assert result.coverage > 0.0
+    assert len(result.domains) > 0
+    assert result.algorithm_version == "1.0.0"
+
+def test_partition_protein_file_not_found():
+    """Test error handling for missing file."""
+    with pytest.raises(FileNotFoundError):
+        partition_protein(summary_xml="nonexistent.xml")
+
+def test_partition_protein_invalid_xml():
+    """Test error handling for corrupt XML."""
+    with pytest.raises(PartitionError):
+        partition_protein(summary_xml="tests/data/corrupt.xml")
 ```
 
-#### 7E. Database Importer (Day 9)
-
-```python
-# src/pyecod_mini/production/database.py
-# Implement:
-# - ImportResult dataclass
-# - DatabaseImporter class
-
-# Test with test database:
-pytest tests/test_production.py::test_database_importer -v
-```
-
-#### 7F. Production CLI (Day 10)
-
-```bash
-# Add production subcommands to CLI
-pyecod-mini production scan --help
-pyecod-mini production process --help
-pyecod-mini production monitor --help
-pyecod-mini production import --help
-```
-
-**Deliverable**: Complete production framework
+**Deliverable**: Clean library API that matches PYECOD_MINI_API_SPEC.md
 
 ---
 
-### Step 8: Integration Testing (Day 11)
+### Step 8: Integration with pyecod_prod (Day 8)
 
-**Goal**: End-to-end testing of production workflow
+**Goal**: Ensure pyecod_mini works correctly when called by pyecod_prod
 
-#### 8A. Small Test Batch (10 proteins)
+#### 8A. Create Integration Test
 
-```bash
-# Full workflow test
-pyecod-mini production scan --max-proteins 10 --output test_tasks.json
-pyecod-mini production process --tasks test_tasks.json --max-concurrent 2
-pyecod-mini production monitor --stats
-pyecod-mini production import --dry-run
+```python
+# tests/test_pyecod_prod_integration.py
+"""
+Test integration with pyecod_prod.
+
+Simulates how pyecod_prod will call pyecod_mini.
+"""
+
+def test_prod_workflow_simulation():
+    """Simulate pyecod_prod calling pyecod_mini."""
+
+    # 1. pyecod_prod generates summary XML (simulate this)
+    summary_xml = create_test_summary_xml("tests/output/test_summary.xml")
+
+    # 2. pyecod_prod calls pyecod_mini library
+    from pyecod_mini import partition_protein
+
+    result = partition_protein(
+        summary_xml=summary_xml,
+        output_xml="tests/output/test_partition.xml",
+        batch_id="test_batch"
+    )
+
+    # 3. pyecod_prod uses results (coverage, domains)
+    assert result.coverage >= 0.0
+    assert result.coverage <= 1.0
+
+    # 4. pyecod_prod applies quality assessment (its policy, not ours)
+    if result.coverage >= 0.80:
+        quality = "good"  # This is pyecod_prod's decision
+    else:
+        quality = "low_coverage"
+
+    print(f"Quality (pyecod_prod policy): {quality}")
 ```
 
-**Verify**:
-- ✅ All 10 proteins processed
-- ✅ Output XML files created
-- ✅ Tracking database updated
-- ✅ Quality metrics reasonable
+#### 8B. Coordinate with pyecod_prod
 
-#### 8B. Medium Test Batch (100 proteins)
+1. Ensure pyecod_prod has updated `partition_runner.py` to use library API
+2. Test on small batch through full pyecod_prod pipeline
+3. Verify manifest tracking works correctly
+4. Validate XML format compatibility
+
+#### 8C. Version Pinning Test
 
 ```bash
-# Scaling test
-pyecod-mini production process --max-proteins 100 --max-concurrent 10
+# In pyecod_prod, test version pinning
+pip install pyecod-mini==1.0.0
 
-# Monitor performance:
-# - Throughput: >= 400 proteins/hour
-# - Success rate: >= 95%
-# - Quality: >= 60% good
+# Run pyecod_prod workflow
+cd ../pyecod_prod
+python scripts/run_small_test.py
+
+# Verify partition step uses correct version
+grep "algorithm_version" /data/ecod/test_batches/*/partitions/*.xml
 ```
 
-**Deliverable**: Proven production workflow on test data
+**Deliverable**: Validated integration with pyecod_prod
 
 ---
 
-### Step 9: Production Deployment (Days 12-14)
+### Step 9: Documentation & Release (Day 9)
 
-**Goal**: Process all ~40k representative proteins
+**Goal**: Complete documentation and prepare for release
 
-#### 9A. Production Configuration
-
-```bash
-# Set up production config
-cp config/production.template.yml config/production.yml
-# Edit with real database credentials, paths
-
-# Validate configuration
-pyecod-mini production validate-config
-```
-
-#### 9B. Staged Rollout
-
-```bash
-# Stage 1: 1000 proteins
-pyecod-mini production process --max-proteins 1000 --max-concurrent 50
-# Monitor, assess quality, fix any issues
-
-# Stage 2: 5000 proteins
-pyecod-mini production process --max-proteins 5000 --max-concurrent 50
-# Monitor, assess quality
-
-# Stage 3: All remaining (~34k proteins)
-pyecod-mini production process --reps-only --skip-existing --max-concurrent 50
-# This will take ~24-48 hours
-```
-
-#### 9C. Quality Assessment
-
-```bash
-# Generate quality report
-pyecod-mini production quality --output production_quality_report.json
-
-# Verify metrics meet targets:
-# - Success rate >= 95%
-# - Good quality >= 60%
-# - Poor quality <= 10%
-```
-
-#### 9D. Database Import
-
-```bash
-# Check for collisions
-pyecod-mini production import --check-collisions --report collisions.txt
-
-# Import with quality filter
-pyecod-mini production import --quality-filter --collision-strategy skip
-
-# Verify import
-pyecod-mini production verify --count 1000
-```
-
-**Deliverable**: All representative proteins processed and imported
-
----
-
-### Step 10: Documentation & Cleanup (Day 14)
-
-**Goal**: Finalize documentation and prepare for production use
-
-#### 10A. Generate API Documentation
+#### 9A. Generate API Documentation
 
 ```bash
 # Use pdoc or sphinx
 pdoc --html src/pyecod_mini -o docs/api
 ```
 
-#### 10B. Update Documentation
+#### 9B. Update Documentation
 
 - [ ] Algorithm description (docs/algorithm.md)
-- [ ] Production usage guide (docs/production.md)
+- [ ] Library API usage guide (docs/api_usage.md)
 - [ ] Development guide (docs/development.md)
 - [ ] Troubleshooting guide (docs/troubleshooting.md)
 
-#### 10C. Final Validation Report
+#### 9C. Create Release Checklist
 
-Create comprehensive report including:
-- Algorithm validation results
-- Production processing statistics
-- Quality metrics distribution
-- Performance benchmarks
-- Known limitations
-- Future improvements
+- [ ] All tests pass (`pytest tests/ -v`)
+- [ ] Type checking passes (`mypy src/`)
+- [ ] Code formatted (`black src/ tests/`)
+- [ ] Linting clean (`ruff check src/`)
+- [ ] API spec compliance verified
+- [ ] Integration with pyecod_prod tested
+- [ ] Documentation complete
+- [ ] Version tagged (v1.0.0)
 
-**Deliverable**: Production-ready repository with complete documentation
+#### 9D. Package and Publish
+
+```bash
+# Build package
+python -m build
+
+# Test installation
+pip install dist/pyecod_mini-1.0.0-py3-none-any.whl
+
+# Verify
+python -c "from pyecod_mini import partition_protein; print('OK')"
+```
+
+**Deliverable**: Released pyecod_mini v1.0.0 ready for production use
 
 ---
 
@@ -522,16 +555,18 @@ Create comprehensive report including:
 - ✅ Performance benchmarks met
 - ✅ Validation report generated
 
-### Milestone 3: Production Framework Ready ✨
-- ✅ All production components implemented
-- ✅ Integration tests pass
-- ✅ 100-protein test batch processed via SLURM
+### Milestone 3: Library API Complete ✨
+- ✅ Public API implemented per PYECOD_MINI_API_SPEC.md
+- ✅ Library API tests pass
+- ✅ XML output format matches spec
+- ✅ Coverage calculation included in output
 
-### Milestone 4: Production Deployment ✨
-- ✅ 40k proteins processed
-- ✅ Quality metrics acceptable
-- ✅ Results imported to database
+### Milestone 4: Integration Complete ✨
+- ✅ Integration with pyecod_prod validated
+- ✅ Small batch test through full pipeline
+- ✅ Version pinning tested
 - ✅ Documentation complete
+- ✅ v1.0.0 released
 
 ## Quick Reference Commands
 
@@ -544,21 +579,18 @@ mypy src/                             # Type checking
 black src/ tests/                     # Format code
 ruff check src/                       # Lint code
 
-# Algorithm Testing
+# Algorithm Testing (CLI)
 pyecod-mini 8ovp_A --verbose          # Test single protein
 pyecod-mini --test-suite              # Run formal test suite
 python scripts/validate_algorithm.py  # Comprehensive validation
 
-# Production Processing
-pyecod-mini production scan           # Scan for proteins
-pyecod-mini production process        # Submit SLURM jobs
-pyecod-mini production monitor        # Monitor progress
-pyecod-mini production import         # Import to database
+# Library API Testing (Python)
+python -c "from pyecod_mini import partition_protein; print('OK')"
+python scripts/test_library_api.py    # Test library integration
 
-# Utilities
-pyecod-mini --list-batches            # Show available batches
-pyecod-mini --validate                # Validate configuration
-pyecod-mini production stats          # Show processing stats
+# Package Build
+python -m build                       # Build distribution
+pip install dist/pyecod_mini-*.whl    # Install built package
 ```
 
 ## Troubleshooting
@@ -574,18 +606,39 @@ pyecod-mini production stats          # Show processing stats
 **Issue**: Regression tests fail
 **Solution**: Compare with old mini output, may need to adjust paths or reference data
 
-**Issue**: SLURM jobs fail
-**Solution**: Check logs in `/tmp/pyecod_mini_logs/`, verify environment setup
+**Issue**: Integration with pyecod_prod fails
+**Solution**: Verify API spec compliance, check XML format, ensure version compatibility
 
 ## Getting Help
 
-- Check planning documents (EXTRACTION_PLAN.md, etc.)
-- Review CLAUDE.md for lessons learned
+- Check planning documents (EXTRACTION_PLAN.md, ALGORITHM_VALIDATION.md)
+- Review PYECOD_MINI_API_SPEC.md for integration questions
 - Run with `--verbose` for detailed output
-- Check logs and tracking database
+- Check test output for validation errors
+
+---
+
+## Separation of Concerns Reminder
+
+**pyecod_mini** (this repo):
+- ✅ Domain partitioning algorithm
+- ✅ Evidence parsing (BLAST XML, HHR files)
+- ✅ Coverage calculation
+- ✅ Library API + simple CLI
+- ❌ NO SLURM, NO batch orchestration, NO production infrastructure
+
+**pyecod_prod** (separate repo):
+- ✅ PDB data acquisition
+- ✅ BLAST/HHsearch execution via SLURM
+- ✅ Batch workflow orchestration
+- ✅ Quality policy decisions
+- ✅ Database integration
+- ✅ Calls pyecod_mini as library/CLI
+
+See [PYECOD_MINI_API_SPEC.md](PYECOD_MINI_API_SPEC.md) for the formal contract.
 
 ---
 
 **Ready to Begin!** Start with Step 1 and work through systematically.
 
-**Estimated Timeline**: 14 days from start to production deployment
+**Estimated Timeline**: 9 days from start to release

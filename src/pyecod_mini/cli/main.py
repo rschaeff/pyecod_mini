@@ -23,6 +23,9 @@ from .utils import run_test_suite, setup_references
 def main():
     """Main entry point"""
 
+    # Import version here to avoid circular imports
+    import pyecod_mini
+
     parser = argparse.ArgumentParser(
         description="pyECOD Mini - Clean Domain Partitioning Tool with Enhanced Provenance Tracking",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -42,6 +45,13 @@ Enhanced Features:
   • File integrity verification with SHA256 hashes
   • Algorithm parameter and performance metrics capture
         """,
+    )
+
+    # Version flag
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"pyecod-mini {pyecod_mini.__version__}",
     )
 
     # Main action

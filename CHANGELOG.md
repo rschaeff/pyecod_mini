@@ -14,32 +14,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Created repository structure with modern Python packaging
 - Set up pyproject.toml with mypy, black, ruff, pytest configurations
 
-## [2.0.0] - TBD
+## [2.0.0] - 2025-10-19
 
 ### Major Changes
-- Complete rewrite and extraction from legacy pyECOD repository
-- Modern Python packaging with pyproject.toml
-- Consistent dataclass usage throughout (no dict confusion)
-- Comprehensive type hints (mypy compliant)
-- Production-ready SLURM framework
+- **Library API**: Stable programmatic API for integration with pyecod_prod
+- **Version Tracking**: Algorithm version embedded in all outputs
+- **API Spec Compliance**: Formal contract via PYECOD_MINI_API_SPEC.md
+- Complete separation from production infrastructure (now in pyecod_prod)
 
 ### Added
-- Core domain partitioning algorithm (proven, 6/6 regression tests)
-- Boundary optimization with provenance tracking
-- Production processing framework (Scanner, SLURM Manager, Monitor)
-- Database import with collision detection
-- Real-time monitoring dashboard
+- **Library API** (`api.py`):
+  - `partition_protein()` - Main partitioning function
+  - `PartitionResult` - Structured result dataclass
+  - `PartitionError` - Partition-specific exception
+  - `Domain` - API domain dataclass (simpler than internal model)
+- **CLI Version Support**: `pyecod-mini --version` displays package version
+- **Version Tracking**:
+  - Package version (`__version__ = "2.0.0"`)
+  - Writer prioritizes package version over git version
+  - Algorithm version in partition XML metadata
+- **Enhanced Provenance**:
+  - Reference coverage tracking
+  - Evidence quality thresholds
+  - Complete boundary optimization audit trails
+- **Quality Assessment**:
+  - HHsearch probability reporting
+  - Reference coverage calculation
+  - Evidence quality flags
 
 ### Changed
-- Migrated from dict-based to dataclass-based data structures
-- Added type hints to all functions
-- Modernized CLI interface
-- Improved error handling and logging
+- **Architecture**: Separated algorithm (this repo) from production infrastructure (pyecod_prod)
+- **Writer**: `get_git_version()` now returns package version for reproducibility
+- **Exports**: Clean `__all__` in `__init__.py` with library API components
+- **Documentation**: Updated for library usage and API specification
 
 ### Fixed
-- Inconsistent data structure usage
-- Missing type annotations
-- Unclear provenance tracking
+- Version tracking now uses package version (not git tags)
+- Evidence standardization before processing
+- Reference coverage calculation for quality assessment
+
+### Migration Notes
+- **Breaking**: Production workflows moved to pyecod_prod repository
+- **New**: Use library API for programmatic access:
+  ```python
+  from pyecod_mini import partition_protein
+  result = partition_protein(summary_xml, output_xml, pdb_id, chain_id)
+  ```
+- **CLI**: Unchanged for backward compatibility
 
 ## [1.0.0] - 2024 (Legacy Mini)
 

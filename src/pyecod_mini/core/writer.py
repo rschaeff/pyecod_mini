@@ -23,15 +23,23 @@ def get_git_commit_hash() -> str:
 
 
 def get_git_version() -> str:
-    """Get semantic version + commit hash"""
+    """Get algorithm version (package version preferred, git as fallback)"""
+    # Prioritize package version for production releases
     try:
-        # Try to get latest git tag
+        import pyecod_mini
+        return pyecod_mini.__version__
+    except (ImportError, AttributeError):
+        pass
+
+    # Fallback to git version for development
+    try:
         result = subprocess.run(
             ["git", "describe", "--tags", "--always"], capture_output=True, text=True, check=True
         )
         return result.stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
-        return f"mini_pyecod_unknown_{get_git_commit_hash()[:8]}"
+        commit_hash = get_git_commit_hash()
+        return f"unknown-{commit_hash[:8]}" if commit_hash and commit_hash != "unknown" else "unknown"
 
 
 def calculate_file_hash(file_path: str) -> Optional[str]:
