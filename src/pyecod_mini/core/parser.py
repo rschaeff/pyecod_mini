@@ -1,19 +1,18 @@
 """Parse domain summary XML with robust chain_id extraction and comprehensive provenance tracking"""
 
 import xml.etree.ElementTree as ET
-from typing import List, Dict, Optional, Tuple, Any
-from .sequence_range import SequenceRange
-from .models import Evidence
+from typing import Any
+
 from .evidence_utils import (
-    populate_evidence_provenance,
     calculate_evidence_confidence,
-    extract_chain_id_from_evidence,
-    validate_evidence_provenance
+    populate_evidence_provenance,
+    validate_evidence_provenance,
 )
+from .models import Evidence
+from .sequence_range import SequenceRange
 
 
-
-def create_domain_id_lookup(domain_definitions: Dict = None) -> Dict[str, Tuple[str, str]]:
+def create_domain_id_lookup(domain_definitions: dict = None) -> dict[str, tuple[str, str]]:
     """
     Create reverse lookup from domain_id -> (pdb_id, chain_id)
     This is much more robust than parsing domain_id strings
@@ -32,7 +31,9 @@ def create_domain_id_lookup(domain_definitions: Dict = None) -> Dict[str, Tuple[
     return lookup
 
 
-def extract_pdb_chain_robust(domain_id: str, domain_lookup: Dict[str, Tuple[str, str]]) -> Tuple[str, str]:
+def extract_pdb_chain_robust(
+    domain_id: str, domain_lookup: dict[str, tuple[str, str]]
+) -> tuple[str, str]:
     """
     Robustly extract pdb_id and chain_id from domain_id using lookup first, fallback parsing second
 
@@ -66,13 +67,15 @@ def extract_pdb_chain_robust(domain_id: str, domain_lookup: Dict[str, Tuple[str,
     return source_pdb, chain_id
 
 
-def parse_domain_summary(xml_path: str,
-                        reference_lengths: Dict[str, int] = None,
-                        protein_lengths: Dict[Tuple[str, str], int] = None,
-                        blast_alignments: Dict[Tuple[str, str], Any] = None,
-                        domain_definitions: Dict = None,
-                        verbose: bool = False,
-                        require_reference_lengths: bool = True) -> List[Evidence]:
+def parse_domain_summary(
+    xml_path: str,
+    reference_lengths: dict[str, int] = None,
+    protein_lengths: dict[tuple[str, str], int] = None,
+    blast_alignments: dict[tuple[str, str], Any] = None,
+    domain_definitions: dict = None,
+    verbose: bool = False,
+    require_reference_lengths: bool = True,
+) -> list[Evidence]:
     """
     Parse evidence from domain summary XML with robust chain_id extraction.
 
@@ -110,23 +113,12 @@ def parse_domain_summary(xml_path: str,
         blast_alignments = {}
 
     evidence_list = []
-    evidence_counts = {
-        'chain_blast': 0,
-        'domain_blast': 0,
-        'hhsearch': 0
-    }
-    skipped_counts = {
-        'no_reference_length': 0,
-        'parse_error': 0
-    }
+    evidence_counts = {"chain_blast": 0, "domain_blast": 0, "hhsearch": 0}
+    skipped_counts = {"no_reference_length": 0, "parse_error": 0}
 
     # Create domain_id lookup for robust chain_id extraction
     domain_lookup = create_domain_id_lookup(domain_definitions)
-    chain_id_stats = {
-        'via_lookup': 0,
-        'via_fallback': 0,
-        'extraction_failed': 0
-    }
+    chain_id_stats = {"via_lookup": 0, "via_fallback": 0, "extraction_failed": 0}
 
     if verbose and domain_lookup:
         print(f"Created domain lookup for {len(domain_lookup)} domain IDs")
@@ -141,13 +133,8 @@ def parse_domain_summary(xml_path: str,
         if query_reg is not None and query_reg.text:
             try:
                 evalue = float(hit.get("evalues", "999"))
-                confidence = 0.5  # Default
-                if evalue < 1e-10:
-                    confidence = 0.9
-                elif evalue < 1e-5:
-                    confidence = 0.7
-                elif evalue < 0.001:
-                    confidence = 0.6
+                if evalue < 1e-10 or evalue < 1e-5 or evalue < 0.001:
+                    pass
 
                 # Get protein length for chain BLAST
                 reference_length = None
@@ -158,7 +145,7 @@ def parse_domain_summary(xml_path: str,
                         (pdb_lower, chain_id),
                         (pdb_id, chain_id),
                         f"{pdb_lower}_{chain_id}",
-                        f"{pdb_id}_{chain_id}"
+                        f"{pdb_id}_{chain_id}",
                     ]
 
                     for key in lookup_keys:
@@ -168,7 +155,7 @@ def parse_domain_summary(xml_path: str,
 
                 if require_reference_lengths and reference_length is None:
                     skipped_chain_blast.append(f"{pdb_id}_{chain_id}")
-                    skipped_counts['no_reference_length'] += 1
+                    skipped_counts["no_reference_length"] += 1
                     continue
 
                 # Create domain_id for chain BLAST
@@ -179,18 +166,18 @@ def parse_domain_summary(xml_path: str,
                     source_pdb=pdb_id,
                     query_range=SequenceRange.parse(query_reg.text),
                     evalue=evalue,
-                    domain_id=f"{pdb_id}_{chain_id}"
+                    domain_id=f"{pdb_id}_{chain_id}",
                 )
 
                 evidence = populate_evidence_provenance(
                     evidence=evidence,
                     alignment=blast_alignments.get((pdb_id, chain_id)),
-                    reference_length=reference_length
+                    reference_length=reference_length,
                 )
 
                 is_valid, validation_issues = validate_evidence_provenance(evidence)
                 if not is_valid:
-                    skipped_counts['validation_failed'] += 1
+                    skipped_counts["validation_failed"] += 1
                     if verbose:
                         print(f"  Warning: Evidence validation failed: {validation_issues}")
                     continue
@@ -200,10 +187,10 @@ def parse_domain_summary(xml_path: str,
                     evidence.alignment = blast_alignments[(pdb_id, chain_id)]
 
                 evidence_list.append(evidence)
-                evidence_counts['chain_blast'] += 1
+                evidence_counts["chain_blast"] += 1
 
             except Exception as e:
-                skipped_counts['parse_error'] += 1
+                skipped_counts["parse_error"] += 1
                 if verbose:
                     print(f"  Warning: Failed to parse chain BLAST hit {pdb_id}: {e}")
 
@@ -212,8 +199,8 @@ def parse_domain_summary(xml_path: str,
         domain_id = hit.get("domain_id", "")
         if not domain_id:
             if verbose:
-                print(f"  Warning: Skipping domain BLAST hit without domain_id")
-            skipped_counts['parse_error'] += 1
+                print("  Warning: Skipping domain BLAST hit without domain_id")
+            skipped_counts["parse_error"] += 1
             continue
 
         # ROBUST: Use lookup-based approach for pdb_id and chain_id extraction
@@ -221,11 +208,11 @@ def parse_domain_summary(xml_path: str,
 
         # Track extraction method for statistics
         if domain_id in domain_lookup:
-            chain_id_stats['via_lookup'] += 1
+            chain_id_stats["via_lookup"] += 1
         elif chain_id:
-            chain_id_stats['via_fallback'] += 1
+            chain_id_stats["via_fallback"] += 1
         else:
-            chain_id_stats['extraction_failed'] += 1
+            chain_id_stats["extraction_failed"] += 1
             if verbose:
                 print(f"  Warning: Could not determine chain_id for domain {domain_id}")
 
@@ -246,30 +233,26 @@ def parse_domain_summary(xml_path: str,
                     elif source_pdb in reference_lengths:
                         reference_length = reference_lengths[source_pdb]
                     # Try without the 'e' prefix if domain_id starts with 'e'
-                    elif domain_id.startswith('e') and domain_id[1:] in reference_lengths:
+                    elif domain_id.startswith("e") and domain_id[1:] in reference_lengths:
                         reference_length = reference_lengths[domain_id[1:]]
 
                 # Calculate alignment coverage if we have hit range and reference data
-                alignment_coverage = None
                 hit_range = None
                 if hit_reg is not None and hit_reg.text and reference_length:
                     hit_range = SequenceRange.parse(hit_reg.text)
-                    alignment_coverage = hit_range.total_length / reference_length
+                    hit_range.total_length / reference_length
 
                 # Skip if reference lengths are required but missing
                 if require_reference_lengths and not reference_length:
                     if verbose:
                         print(f"  Skipping {domain_id}: no reference length available")
-                    skipped_counts['no_reference_length'] += 1
+                    skipped_counts["no_reference_length"] += 1
                     continue
 
                 # Parse e-value and calculate confidence
                 evalue = float(hit.get("evalues", "999"))
-                confidence = 0.5  # Default
-                if evalue < 1e-10:
-                    confidence = 0.9
-                elif evalue < 1e-5:
-                    confidence = 0.7
+                if evalue < 1e-10 or evalue < 1e-5:
+                    pass
 
                 # Create evidence with robust provenance fields
                 evidence = Evidence(
@@ -277,33 +260,30 @@ def parse_domain_summary(xml_path: str,
                     source_pdb=source_pdb,
                     query_range=query_range,
                     domain_id=domain_id,
-                    evalue=evalue
+                    evalue=evalue,
                 )
 
-                classification = {
-                    't_group': hit.get("t_group"),
-                    'h_group': hit.get("h_group")
-                }
+                classification = {"t_group": hit.get("t_group"), "h_group": hit.get("h_group")}
 
                 evidence = populate_evidence_provenance(
                     evidence=evidence,
                     hit_range=hit_range,
                     reference_length=reference_length,
-                    classification=classification
+                    classification=classification,
                 )
 
                 is_valid, validation_issues = validate_evidence_provenance(evidence)
                 if not is_valid:
-                    skipped_counts['validation_failed'] += 1
+                    skipped_counts["validation_failed"] += 1
                     if verbose:
                         print(f"  Warning: Evidence validation failed: {validation_issues}")
                     continue
 
                 evidence_list.append(evidence)
-                evidence_counts['domain_blast'] += 1
+                evidence_counts["domain_blast"] += 1
 
             except Exception as e:
-                skipped_counts['parse_error'] += 1
+                skipped_counts["parse_error"] += 1
                 if verbose:
                     print(f"  Warning: Failed to parse domain BLAST hit {domain_id}: {e}")
 
@@ -314,8 +294,8 @@ def parse_domain_summary(xml_path: str,
 
         if not domain_id:
             if verbose:
-                print(f"  Warning: Skipping HHSearch hit without domain_id or hit_id")
-            skipped_counts['parse_error'] += 1
+                print("  Warning: Skipping HHSearch hit without domain_id or hit_id")
+            skipped_counts["parse_error"] += 1
             continue
 
         # Use robust extraction for HHsearch as well
@@ -329,7 +309,7 @@ def parse_domain_summary(xml_path: str,
         if query_reg is not None and query_reg.text:
             try:
                 prob = float(hit.get("probability", "0"))
-                confidence = prob / 100.0 if prob > 1.0 else prob
+                prob / 100.0 if prob > 1.0 else prob
 
                 # Look for reference length
                 reference_length = None
@@ -343,14 +323,14 @@ def parse_domain_summary(xml_path: str,
                     elif source_pdb in reference_lengths:
                         reference_length = reference_lengths[source_pdb]
                     # Try without the 'e' prefix if domain_id starts with 'e'
-                    elif lookup_id.startswith('e') and lookup_id[1:] in reference_lengths:
+                    elif lookup_id.startswith("e") and lookup_id[1:] in reference_lengths:
                         reference_length = reference_lengths[lookup_id[1:]]
 
                 # Skip if reference lengths are required but missing
                 if require_reference_lengths and not reference_length:
                     if verbose:
                         print(f"  Skipping HHSearch {lookup_id}: no reference length available")
-                    skipped_counts['no_reference_length'] += 1
+                    skipped_counts["no_reference_length"] += 1
                     continue
 
                 evidence = Evidence(
@@ -358,33 +338,32 @@ def parse_domain_summary(xml_path: str,
                     source_pdb=source_pdb,
                     query_range=SequenceRange.parse(query_reg.text),
                     domain_id=domain_id,
-                    evalue=float(hit.get("evalue", "999"))
+                    evalue=float(hit.get("evalue", "999")),
                 )
 
                 evidence = populate_evidence_provenance(
-                    evidence=evidence,
-                    reference_length=reference_length
+                    evidence=evidence, reference_length=reference_length
                 )
 
                 prob = float(hit.get("probability", "0"))
                 evidence.confidence = calculate_evidence_confidence(
                     probability=prob,
                     evidence_type="hhsearch",
-                    alignment_coverage=evidence.alignment_coverage
+                    alignment_coverage=evidence.alignment_coverage,
                 )
 
                 is_valid, validation_issues = validate_evidence_provenance(evidence)
                 if not is_valid:
-                    skipped_counts['validation_failed'] += 1
+                    skipped_counts["validation_failed"] += 1
                     if verbose:
                         print(f"  Warning: Evidence validation failed: {validation_issues}")
                     continue
 
                 evidence_list.append(evidence)
-                evidence_counts['hhsearch'] += 1
+                evidence_counts["hhsearch"] += 1
 
             except Exception as e:
-                skipped_counts['parse_error'] += 1
+                skipped_counts["parse_error"] += 1
                 if verbose:
                     print(f"  Warning: Failed to parse HHSearch hit {hit_id}: {e}")
 
@@ -400,12 +379,12 @@ def parse_domain_summary(xml_path: str,
 
             # Report chain_id extraction statistics
             if any(chain_id_stats.values()):
-                print(f"Chain ID extraction:")
-                if chain_id_stats['via_lookup'] > 0:
+                print("Chain ID extraction:")
+                if chain_id_stats["via_lookup"] > 0:
                     print(f"  Via lookup: {chain_id_stats['via_lookup']}")
-                if chain_id_stats['via_fallback'] > 0:
+                if chain_id_stats["via_fallback"] > 0:
                     print(f"  Via fallback: {chain_id_stats['via_fallback']}")
-                if chain_id_stats['extraction_failed'] > 0:
+                if chain_id_stats["extraction_failed"] > 0:
                     print(f"  Failed: {chain_id_stats['extraction_failed']}")
 
             # Report skipped items
@@ -418,16 +397,20 @@ def parse_domain_summary(xml_path: str,
 
                 # Show details for chain BLAST skips
                 if skipped_chain_blast and verbose:
-                    print(f"  Skipped chain BLAST entries (no protein length): {len(skipped_chain_blast)} total")
+                    print(
+                        f"  Skipped chain BLAST entries (no protein length): {len(skipped_chain_blast)} total"
+                    )
                     if len(skipped_chain_blast) <= 10:
                         print(f"    {', '.join(skipped_chain_blast)}")
                     else:
-                        print(f"    {', '.join(skipped_chain_blast[:10])} ... and {len(skipped_chain_blast)-10} more")
+                        print(
+                            f"    {', '.join(skipped_chain_blast[:10])} ... and {len(skipped_chain_blast)-10} more"
+                        )
 
     return evidence_list
 
 
-def get_evidence_summary(evidence_list: List[Evidence]) -> Dict[str, Any]:
+def get_evidence_summary(evidence_list: list[Evidence]) -> dict[str, Any]:
     """
     Get summary statistics for evidence.
 
@@ -439,11 +422,11 @@ def get_evidence_summary(evidence_list: List[Evidence]) -> Dict[str, Any]:
     """
     if not evidence_list:
         return {
-            'total': 0,
-            'by_type': {},
-            'high_confidence': 0,
-            'unique_families': 0,
-            'with_provenance': 0
+            "total": 0,
+            "by_type": {},
+            "high_confidence": 0,
+            "unique_families": 0,
+            "with_provenance": 0,
         }
 
     by_type = {}
@@ -468,16 +451,16 @@ def get_evidence_summary(evidence_list: List[Evidence]) -> Dict[str, Any]:
             with_provenance += 1
 
     return {
-        'total': len(evidence_list),
-        'by_type': by_type,
-        'high_confidence': high_conf,
-        'unique_families': len(families),
-        'with_provenance': with_provenance,
-        'provenance_percent': (with_provenance / len(evidence_list)) * 100 if evidence_list else 0
+        "total": len(evidence_list),
+        "by_type": by_type,
+        "high_confidence": high_conf,
+        "unique_families": len(families),
+        "with_provenance": with_provenance,
+        "provenance_percent": (with_provenance / len(evidence_list)) * 100 if evidence_list else 0,
     }
 
 
-def load_reference_lengths(reference_file: str = None) -> Dict[str, int]:
+def load_reference_lengths(reference_file: str = None) -> dict[str, int]:
     """
     Load reference protein lengths from file.
 
@@ -494,7 +477,8 @@ def load_reference_lengths(reference_file: str = None) -> Dict[str, int]:
 
     try:
         import csv
-        with open(reference_file, 'r') as f:
+
+        with open(reference_file) as f:
             reader = csv.reader(f)
             # Skip header if present
             first_row = next(reader, None)
@@ -519,7 +503,7 @@ def load_reference_lengths(reference_file: str = None) -> Dict[str, int]:
     return reference_lengths
 
 
-def load_protein_lengths(protein_file: str = None) -> Dict[Tuple[str, str], int]:
+def load_protein_lengths(protein_file: str = None) -> dict[tuple[str, str], int]:
     """
     Load protein lengths from file.
 
@@ -536,7 +520,8 @@ def load_protein_lengths(protein_file: str = None) -> Dict[Tuple[str, str], int]
 
     try:
         import csv
-        with open(protein_file, 'r') as f:
+
+        with open(protein_file) as f:
             reader = csv.reader(f)
             # Skip header if present
             first_row = next(reader, None)
@@ -549,9 +534,9 @@ def load_protein_lengths(protein_file: str = None) -> Dict[Tuple[str, str], int]
                     if len(first_row) >= 3:
                         # Format: pdb_id,chain_id,length
                         protein_lengths[(first_row[0], first_row[1])] = int(first_row[2])
-                    elif len(first_row) >= 2 and '_' in first_row[0]:
+                    elif len(first_row) >= 2 and "_" in first_row[0]:
                         # Format: pdb_chain,length
-                        parts = first_row[0].split('_')
+                        parts = first_row[0].split("_")
                         if len(parts) >= 2:
                             protein_lengths[(parts[0], parts[1])] = int(first_row[1])
 
@@ -560,9 +545,9 @@ def load_protein_lengths(protein_file: str = None) -> Dict[Tuple[str, str], int]
                 if len(row) >= 3 and row[2].isdigit():
                     # Format: pdb_id,chain_id,length
                     protein_lengths[(row[0], row[1])] = int(row[2])
-                elif len(row) >= 2 and '_' in row[0] and row[1].isdigit():
+                elif len(row) >= 2 and "_" in row[0] and row[1].isdigit():
                     # Format: pdb_chain,length
-                    parts = row[0].split('_')
+                    parts = row[0].split("_")
                     if len(parts) >= 2:
                         protein_lengths[(parts[0], parts[1])] = int(row[1])
 
@@ -574,7 +559,7 @@ def load_protein_lengths(protein_file: str = None) -> Dict[Tuple[str, str], int]
     return protein_lengths
 
 
-def validate_evidence_consistency(evidence_list: List[Evidence]) -> Dict[str, Any]:
+def validate_evidence_consistency(evidence_list: list[Evidence]) -> dict[str, Any]:
     """
     Validate evidence for consistency issues and potential problems.
 
@@ -586,12 +571,12 @@ def validate_evidence_consistency(evidence_list: List[Evidence]) -> Dict[str, An
     """
     issues = []
     stats = {
-        'total_evidence': len(evidence_list),
-        'missing_chain_id': 0,
-        'missing_reference_length': 0,
-        'low_confidence': 0,
-        'invalid_ranges': 0,
-        'duplicate_domain_ids': 0
+        "total_evidence": len(evidence_list),
+        "missing_chain_id": 0,
+        "missing_reference_length": 0,
+        "low_confidence": 0,
+        "invalid_ranges": 0,
+        "duplicate_domain_ids": 0,
     }
 
     seen_domain_ids = set()
@@ -599,35 +584,31 @@ def validate_evidence_consistency(evidence_list: List[Evidence]) -> Dict[str, An
     for ev in evidence_list:
         # Check for missing chain_id
         if not ev.source_chain_id:
-            stats['missing_chain_id'] += 1
+            stats["missing_chain_id"] += 1
 
         # Check for missing reference length
         if not ev.reference_length:
-            stats['missing_reference_length'] += 1
+            stats["missing_reference_length"] += 1
 
         # Check for low confidence
         if ev.confidence < 0.5:
-            stats['low_confidence'] += 1
+            stats["low_confidence"] += 1
 
         # Check for invalid ranges
         try:
             positions = ev.query_range.to_positions_simple()
             if len(positions) == 0:
-                stats['invalid_ranges'] += 1
+                stats["invalid_ranges"] += 1
                 issues.append(f"Empty range for {ev.domain_id}: {ev.query_range}")
         except Exception as e:
-            stats['invalid_ranges'] += 1
+            stats["invalid_ranges"] += 1
             issues.append(f"Invalid range for {ev.domain_id}: {e}")
 
         # Check for duplicate domain_ids
         if ev.domain_id and ev.domain_id in seen_domain_ids:
-            stats['duplicate_domain_ids'] += 1
+            stats["duplicate_domain_ids"] += 1
             issues.append(f"Duplicate domain_id: {ev.domain_id}")
         elif ev.domain_id:
             seen_domain_ids.add(ev.domain_id)
 
-    return {
-        'stats': stats,
-        'issues': issues,
-        'is_valid': len(issues) == 0
-    }
+    return {"stats": stats, "issues": issues, "is_valid": len(issues) == 0}

@@ -5,27 +5,29 @@ Domain summary XML parser tests for mini_pyecod
 Tests the parsing of domain summary XML files and reference data loading.
 """
 
-import pytest
-from pathlib import Path
 import csv
 
 # Add parent directory to path for imports
 import sys
+from pathlib import Path
+
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pyecod_mini.core.parser import (
-    parse_domain_summary, 
-    load_reference_lengths, 
-    load_protein_lengths,
-    get_evidence_summary
-)
 from pyecod_mini.core.models import Evidence
+from pyecod_mini.core.parser import (
+    get_evidence_summary,
+    load_protein_lengths,
+    load_reference_lengths,
+    parse_domain_summary,
+)
 from pyecod_mini.core.sequence_range import SequenceRange
 
 
 class TestDomainSummaryParsing:
     """Test domain summary XML parsing"""
-    
+
     @pytest.mark.unit
     def test_parse_valid_domain_summary(self, tmp_path):
         """Test parsing a valid domain summary XML"""
@@ -57,38 +59,38 @@ class TestDomainSummaryParsing:
     </hits>
   </hh_run>
 </blast_summ_doc>"""
-        
+
         xml_file = tmp_path / "test_summary.xml"
         xml_file.write_text(xml_content)
-        
+
         # Create mock reference data
         reference_lengths = {"e6dgvA1": 238, "6dgv": 238}
         protein_lengths = {("6dgv", "A"): 238}
-        
+
         # Parse
         evidence = parse_domain_summary(
             str(xml_file),
             reference_lengths=reference_lengths,
             protein_lengths=protein_lengths,
-            require_reference_lengths=False
+            require_reference_lengths=False,
         )
-        
+
         # Verify we got all evidence types
         assert len(evidence) >= 1
-        
+
         # Check chain BLAST
         chain_blast = [e for e in evidence if e.type == "chain_blast"]
         assert len(chain_blast) == 1
         assert chain_blast[0].source_pdb == "6dgv"
         assert str(chain_blast[0].query_range) == "252-494"
         assert chain_blast[0].evalue == 1e-50
-        
+
         # Check domain BLAST
         domain_blast = [e for e in evidence if e.type == "domain_blast"]
         assert len(domain_blast) == 1
         assert domain_blast[0].domain_id == "e6dgvA1"
         assert str(domain_blast[0].query_range) == "260-480"
-        
+
         # Check HHSearch (may be filtered)
         hhsearch = [e for e in evidence if e.type == "hhsearch"]
         if hhsearch:
@@ -97,7 +99,7 @@ class TestDomainSummaryParsing:
             assert str(hhsearch[0].query_range) == "255-490"
         else:
             print("⚠️ HHsearch evidence was filtered - this may be expected")
-        
+
         # Check confidence scores based on e-values using actual domain IDs
         conf_by_domain = {e.domain_id: e.confidence for e in evidence if e.domain_id}
 
@@ -108,8 +110,11 @@ class TestDomainSummaryParsing:
         # Domain blast should have good confidence (1e-30 e-value)
         if "e6dgvA1" in conf_by_domain:
             # Get the domain blast version (not HHsearch)
-            domain_blast_conf = [e.confidence for e in evidence
-                                if e.type == "domain_blast" and e.domain_id == "e6dgvA1"]
+            domain_blast_conf = [
+                e.confidence
+                for e in evidence
+                if e.type == "domain_blast" and e.domain_id == "e6dgvA1"
+            ]
             if domain_blast_conf:
                 assert domain_blast_conf[0] >= 0.6  # 1e-30 should be medium-high
 
@@ -127,19 +132,19 @@ class TestReferenceLengthLoading:
         csv_file = tmp_path / "domain_lengths.csv"
 
         # Create test CSV
-        with open(csv_file, 'w', newline='') as f:
+        with open(csv_file, "w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(['domain_id', 'length'])  # Header
-            writer.writerow(['e6dgvA1', '238'])
-            writer.writerow(['e2ia4A1', '98'])
-            writer.writerow(['e2ia4A2', '156'])
+            writer.writerow(["domain_id", "length"])  # Header
+            writer.writerow(["e6dgvA1", "238"])
+            writer.writerow(["e2ia4A1", "98"])
+            writer.writerow(["e2ia4A2", "156"])
 
         lengths = load_reference_lengths(str(csv_file))
 
         assert len(lengths) == 3
-        assert lengths['e6dgvA1'] == 238
-        assert lengths['e2ia4A1'] == 98
-        assert lengths['e2ia4A2'] == 156
+        assert lengths["e6dgvA1"] == 238
+        assert lengths["e2ia4A1"] == 98
+        assert lengths["e2ia4A2"] == 156
 
     @pytest.mark.unit
     def test_load_domain_lengths_no_header(self, tmp_path):
@@ -147,16 +152,16 @@ class TestReferenceLengthLoading:
         csv_file = tmp_path / "lengths_no_header.csv"
 
         # No header, straight to data
-        with open(csv_file, 'w', newline='') as f:
+        with open(csv_file, "w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(['test1', '100'])
-            writer.writerow(['test2', '200'])
+            writer.writerow(["test1", "100"])
+            writer.writerow(["test2", "200"])
 
         lengths = load_reference_lengths(str(csv_file))
 
         assert len(lengths) == 2
-        assert lengths['test1'] == 100
-        assert lengths['test2'] == 200
+        assert lengths["test1"] == 100
+        assert lengths["test2"] == 200
 
     @pytest.mark.unit
     def test_load_protein_lengths(self, tmp_path):
@@ -164,19 +169,19 @@ class TestReferenceLengthLoading:
         csv_file = tmp_path / "protein_lengths.csv"
 
         # Format: pdb_id,chain_id,length
-        with open(csv_file, 'w', newline='') as f:
+        with open(csv_file, "w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(['pdb_id', 'chain_id', 'length'])
-            writer.writerow(['6dgv', 'A', '238'])
-            writer.writerow(['2ia4', 'A', '508'])
-            writer.writerow(['8ovp', 'A', '569'])
+            writer.writerow(["pdb_id", "chain_id", "length"])
+            writer.writerow(["6dgv", "A", "238"])
+            writer.writerow(["2ia4", "A", "508"])
+            writer.writerow(["8ovp", "A", "569"])
 
         lengths = load_protein_lengths(str(csv_file))
 
         assert len(lengths) == 3
-        assert lengths[('6dgv', 'A')] == 238
-        assert lengths[('2ia4', 'A')] == 508
-        assert lengths[('8ovp', 'A')] == 569
+        assert lengths[("6dgv", "A")] == 238
+        assert lengths[("2ia4", "A")] == 508
+        assert lengths[("8ovp", "A")] == 569
 
     @pytest.mark.unit
     def test_load_protein_lengths_combined_format(self, tmp_path):
@@ -184,17 +189,17 @@ class TestReferenceLengthLoading:
         csv_file = tmp_path / "protein_lengths_alt.csv"
 
         # Format: pdb_chain,length
-        with open(csv_file, 'w', newline='') as f:
+        with open(csv_file, "w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(['protein_id', 'length'])
-            writer.writerow(['6dgv_A', '238'])
-            writer.writerow(['2ia4_B', '508'])
+            writer.writerow(["protein_id", "length"])
+            writer.writerow(["6dgv_A", "238"])
+            writer.writerow(["2ia4_B", "508"])
 
         lengths = load_protein_lengths(str(csv_file))
 
         assert len(lengths) == 2
-        assert lengths[('6dgv', 'A')] == 238
-        assert lengths[('2ia4', 'B')] == 508
+        assert lengths[("6dgv", "A")] == 238
+        assert lengths[("2ia4", "B")] == 508
 
     @pytest.mark.unit
     def test_load_missing_file(self):
@@ -214,10 +219,10 @@ class TestEvidenceSummary:
         """Test summary of empty evidence"""
         summary = get_evidence_summary([])
 
-        assert summary['total'] == 0
-        assert summary['by_type'] == {}
-        assert summary['high_confidence'] == 0
-        assert summary['unique_families'] == 0
+        assert summary["total"] == 0
+        assert summary["by_type"] == {}
+        assert summary["high_confidence"] == 0
+        assert summary["unique_families"] == 0
 
     @pytest.mark.unit
     def test_evidence_summary_mixed(self):
@@ -228,39 +233,39 @@ class TestEvidenceSummary:
                 source_pdb="pdb1",
                 query_range=SequenceRange.parse("1-100"),
                 confidence=0.95,
-                evalue=1e-50
+                evalue=1e-50,
             ),
             Evidence(
                 type="chain_blast",
                 source_pdb="pdb2",
                 query_range=SequenceRange.parse("150-250"),
                 confidence=0.6,
-                evalue=1e-5
+                evalue=1e-5,
             ),
             Evidence(
                 type="domain_blast",
                 source_pdb="pdb1",
                 query_range=SequenceRange.parse("10-90"),
                 confidence=0.8,
-                evalue=1e-20
+                evalue=1e-20,
             ),
             Evidence(
                 type="hhsearch",
                 source_pdb="pdb3",
                 query_range=SequenceRange.parse("300-400"),
                 confidence=0.85,
-                evalue=1e-15
-            )
+                evalue=1e-15,
+            ),
         ]
 
         summary = get_evidence_summary(evidence)
 
-        assert summary['total'] == 4
-        assert summary['by_type']['chain_blast'] == 2
-        assert summary['by_type']['domain_blast'] == 1
-        assert summary['by_type']['hhsearch'] == 1
-        assert summary['high_confidence'] == 3  # conf > 0.7 or evalue < 1e-10
-        assert summary['unique_families'] == 3  # pdb1, pdb2, pdb3
+        assert summary["total"] == 4
+        assert summary["by_type"]["chain_blast"] == 2
+        assert summary["by_type"]["domain_blast"] == 1
+        assert summary["by_type"]["hhsearch"] == 1
+        assert summary["high_confidence"] == 3  # conf > 0.7 or evalue < 1e-10
+        assert summary["unique_families"] == 3  # pdb1, pdb2, pdb3
 
 
 class TestIntegrationWithRealData:
@@ -272,8 +277,8 @@ class TestIntegrationWithRealData:
         """Test parsing real 8ovp_A domain summary"""
         evidence = parse_domain_summary(
             domain_summary_path,
-            reference_lengths=real_reference_data['domain_lengths'],
-            protein_lengths=real_reference_data['protein_lengths']
+            reference_lengths=real_reference_data["domain_lengths"],
+            protein_lengths=real_reference_data["protein_lengths"],
         )
 
         # Should have evidence
@@ -281,10 +286,10 @@ class TestIntegrationWithRealData:
 
         # Check evidence types
         summary = get_evidence_summary(evidence)
-        assert summary['total'] > 0
+        assert summary["total"] > 0
 
         # Should have multiple evidence types
-        assert len(summary['by_type']) >= 2
+        assert len(summary["by_type"]) >= 2
 
         # Check for expected families
         families = {e.source_pdb for e in evidence if e.source_pdb}

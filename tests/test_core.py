@@ -5,15 +5,15 @@ Core algorithm tests for mini_pyecod
 Tests the fundamental domain partitioning algorithm components.
 """
 
-import pytest
-from pathlib import Path
-from typing import List
-
 # Add parent directory to path for imports
 import sys
+from pathlib import Path
+
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pyecod_mini.core.models import Evidence, Domain, AlignmentData
+from pyecod_mini.core.models import AlignmentData, Evidence
 from pyecod_mini.core.partitioner import partition_domains
 from pyecod_mini.core.sequence_range import SequenceRange
 
@@ -27,7 +27,7 @@ def create_complete_evidence(
     domain_id: str,
     evalue: float = 1e-20,
     t_group: str = None,
-    **kwargs
+    **kwargs,
 ) -> Evidence:
     """Helper function to create evidence with all required fields for quality thresholds"""
 
@@ -38,7 +38,7 @@ def create_complete_evidence(
         min_ref_coverage = 0.50  # 50% threshold for domain_blast and chain_blast
 
     # Use provided reference_coverage or calculate a good default
-    reference_coverage = kwargs.get('reference_coverage', min_ref_coverage + 0.1)
+    reference_coverage = kwargs.get("reference_coverage", min_ref_coverage + 0.1)
 
     query_seq_range = SequenceRange.parse(query_range)
 
@@ -57,7 +57,7 @@ def create_complete_evidence(
         discontinuous=query_seq_range.is_discontinuous,
         hsp_count=1,
         t_group=t_group,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -74,7 +74,7 @@ class TestResidueBlocking:
                 query_range="10-100",
                 confidence=0.95,
                 reference_length=91,
-                domain_id="test1_A"
+                domain_id="test1_A",
             ),
             create_complete_evidence(
                 evidence_type="domain_blast",
@@ -82,8 +82,8 @@ class TestResidueBlocking:
                 query_range="50-150",  # Overlaps with first
                 confidence=0.85,
                 reference_length=101,
-                domain_id="test2_A"
-            )
+                domain_id="test2_A",
+            ),
         ]
 
         domains = partition_domains(evidence, sequence_length=200)
@@ -102,7 +102,7 @@ class TestResidueBlocking:
                 query_range="1-100",
                 confidence=0.95,  # Highest confidence - selected first
                 reference_length=100,
-                domain_id="domain1_A"
+                domain_id="domain1_A",
             ),
             create_complete_evidence(
                 evidence_type="domain_blast",
@@ -110,7 +110,7 @@ class TestResidueBlocking:
                 query_range="90-200",  # 10% overlap with domain1
                 confidence=0.95,  # Second highest - should be accepted
                 reference_length=111,
-                domain_id="domain2_A"
+                domain_id="domain2_A",
             ),
             create_complete_evidence(
                 evidence_type="domain_blast",
@@ -118,8 +118,8 @@ class TestResidueBlocking:
                 query_range="50-150",  # 50% overlap with domain1
                 confidence=0.85,  # Lowest confidence, high overlap - should be rejected
                 reference_length=101,
-                domain_id="domain3_A"
-            )
+                domain_id="domain3_A",
+            ),
         ]
 
         domains = partition_domains(evidence, sequence_length=250)
@@ -142,7 +142,7 @@ class TestResidueBlocking:
                 query_range="1-50",
                 confidence=0.75,
                 reference_length=50,
-                domain_id="hh1_A"
+                domain_id="hh1_A",
             ),
             create_complete_evidence(
                 evidence_type="domain_blast",
@@ -150,7 +150,7 @@ class TestResidueBlocking:
                 query_range="1-50",
                 confidence=0.85,
                 reference_length=50,
-                domain_id="blast1_A"
+                domain_id="blast1_A",
             ),
             # Chain blast without alignment data - will be rejected
             Evidence(
@@ -159,7 +159,7 @@ class TestResidueBlocking:
                 query_range=SequenceRange.parse("1-50"),
                 confidence=0.95,
                 reference_length=50,
-                domain_id="chain1_A"
+                domain_id="chain1_A",
                 # No alignment data - will be rejected
             ),
         ]
@@ -175,7 +175,6 @@ class TestResidueBlocking:
     @pytest.mark.unit
     def test_chain_blast_priority_with_decomposition(self):
         """Test that chain blast wins when decomposition is available"""
-        from pyecod_mini.core.models import AlignmentData
         from pyecod_mini.core.decomposer import DomainReference
 
         # Create alignment data for chain blast evidence
@@ -185,7 +184,7 @@ class TestResidueBlocking:
             query_start=1,
             query_end=50,
             hit_start=1,
-            hit_end=50
+            hit_end=50,
         )
 
         evidence = [
@@ -195,7 +194,7 @@ class TestResidueBlocking:
                 query_range="1-50",
                 confidence=0.85,
                 reference_length=50,
-                domain_id="blast1_A"
+                domain_id="blast1_A",
             ),
             Evidence(
                 type="chain_blast",
@@ -204,7 +203,7 @@ class TestResidueBlocking:
                 confidence=0.95,
                 reference_length=50,
                 domain_id="chain1_A",
-                alignment=alignment  # Required for decomposition
+                alignment=alignment,  # Required for decomposition
             ),
         ]
 
@@ -216,7 +215,7 @@ class TestResidueBlocking:
                     pdb_id="chain1",
                     chain_id="A",
                     range=SequenceRange.parse("1-50"),
-                    length=50
+                    length=50,
                 )
             ]
         }
@@ -224,7 +223,7 @@ class TestResidueBlocking:
         domains = partition_domains(
             evidence,
             sequence_length=100,
-            domain_definitions=domain_definitions  # Enable decomposition
+            domain_definitions=domain_definitions,  # Enable decomposition
         )
 
         # NOW chain blast should win because decomposition is available
@@ -241,7 +240,7 @@ class TestResidueBlocking:
                 query_range="1-15",  # Too small
                 confidence=0.95,
                 reference_length=15,
-                domain_id="tiny_A"
+                domain_id="tiny_A",
             ),
             create_complete_evidence(
                 evidence_type="domain_blast",
@@ -249,8 +248,8 @@ class TestResidueBlocking:
                 query_range="20-100",
                 confidence=0.85,
                 reference_length=81,
-                domain_id="normal_A"
-            )
+                domain_id="normal_A",
+            ),
         ]
 
         domains = partition_domains(evidence, sequence_length=150)
@@ -273,7 +272,7 @@ class TestDiscontinuousDomains:
                 query_range=SequenceRange.parse("1-100,200-250"),
                 confidence=0.95,
                 reference_length=151,
-                domain_id="disc_A"
+                domain_id="disc_A",
                 # No alignment data - should be rejected
             )
         ]
@@ -293,7 +292,7 @@ class TestDiscontinuousDomains:
                 query_range="1-100,200-250",
                 confidence=0.95,
                 reference_length=151,
-                domain_id="disc_domain_A"
+                domain_id="disc_domain_A",
             )
         ]
 
@@ -315,7 +314,7 @@ class TestDiscontinuousDomains:
                 query_range="1-50,100-150",
                 confidence=0.95,
                 reference_length=101,
-                domain_id="disc1_A"
+                domain_id="disc1_A",
             ),
             create_complete_evidence(
                 evidence_type="domain_blast",
@@ -323,8 +322,8 @@ class TestDiscontinuousDomains:
                 query_range="40-120",  # Overlaps both segments
                 confidence=0.85,
                 reference_length=81,
-                domain_id="cont1_A"
-            )
+                domain_id="cont1_A",
+            ),
         ]
 
         domains = partition_domains(evidence, sequence_length=200)
@@ -348,7 +347,7 @@ class TestDomainFamilyAssignment:
                 confidence=0.95,
                 reference_length=100,
                 domain_id="test_A",
-                t_group="1234.5.6"
+                t_group="1234.5.6",
             )
         ]
 
@@ -369,7 +368,7 @@ class TestDomainFamilyAssignment:
                 confidence=0.95,
                 reference_length=50,
                 domain_id="e1abcA1",
-                t_group="1111.1.1"
+                t_group="1111.1.1",
             ),
             # No T-group, has source_pdb
             create_complete_evidence(
@@ -378,7 +377,7 @@ class TestDomainFamilyAssignment:
                 query_range="60-110",
                 confidence=0.95,
                 reference_length=51,
-                domain_id="e2defB1"
+                domain_id="e2defB1",
             ),
             # Only domain_id
             create_complete_evidence(
@@ -387,8 +386,8 @@ class TestDomainFamilyAssignment:
                 query_range="120-170",
                 confidence=0.95,
                 reference_length=51,
-                domain_id="e3ghiC1"
-            )
+                domain_id="e3ghiC1",
+            ),
         ]
 
         domains = partition_domains(evidence_list, sequence_length=200)
@@ -397,8 +396,8 @@ class TestDomainFamilyAssignment:
         # Domains should be ordered by sequence position (N-terminal to C-terminal)
         # domains[0] should be the most N-terminal (position 1-50)
         assert domains[0].family == "1111.1.1"  # T-group (position 1-50)
-        assert domains[1].family == "pdb2"      # source_pdb (position 60-110)
-        assert domains[2].family == "e3ghiC1"   # domain_id (position 120-170)
+        assert domains[1].family == "pdb2"  # source_pdb (position 60-110)
+        assert domains[2].family == "e3ghiC1"  # domain_id (position 120-170)
 
 
 class TestCoverageCalculation:
@@ -414,7 +413,7 @@ class TestCoverageCalculation:
                 query_range="1-100",
                 confidence=0.95,
                 reference_length=100,
-                domain_id="d1_A"
+                domain_id="d1_A",
             ),
             create_complete_evidence(
                 evidence_type="domain_blast",
@@ -422,8 +421,8 @@ class TestCoverageCalculation:
                 query_range="150-200",
                 confidence=0.95,
                 reference_length=51,
-                domain_id="d2_A"
-            )
+                domain_id="d2_A",
+            ),
         ]
 
         sequence_length = 250
@@ -435,7 +434,7 @@ class TestCoverageCalculation:
 
         assert len(domains) == 2
         assert total_coverage == 151
-        assert coverage_fraction == 151/250
+        assert coverage_fraction == 151 / 250
 
     @pytest.mark.unit
     def test_gap_handling(self):
@@ -447,7 +446,7 @@ class TestCoverageCalculation:
                 query_range="1-50",
                 confidence=0.95,
                 reference_length=50,
-                domain_id="d1_A"
+                domain_id="d1_A",
             ),
             create_complete_evidence(
                 evidence_type="domain_blast",
@@ -455,7 +454,7 @@ class TestCoverageCalculation:
                 query_range="100-150",
                 confidence=0.95,
                 reference_length=51,
-                domain_id="d2_A"
+                domain_id="d2_A",
             ),
             create_complete_evidence(
                 evidence_type="domain_blast",
@@ -463,8 +462,8 @@ class TestCoverageCalculation:
                 query_range="200-250",
                 confidence=0.95,
                 reference_length=51,
-                domain_id="d3_A"
-            )
+                domain_id="d3_A",
+            ),
         ]
 
         domains = partition_domains(evidence, sequence_length=300)
@@ -494,7 +493,7 @@ class TestEmptyAndEdgeCases:
                 query_range=SequenceRange.parse("1-100"),
                 confidence=0.95,
                 reference_length=None,  # No reference length
-                domain_id="test_A"
+                domain_id="test_A",
             )
         ]
 
@@ -512,7 +511,7 @@ class TestEmptyAndEdgeCases:
                 query_range="1-100",
                 confidence=0.95,
                 reference_length=100,
-                domain_id="test_A"
+                domain_id="test_A",
             )
         ]
 
@@ -528,26 +527,25 @@ class TestRealWorldScenarios:
     @pytest.mark.unit
     def test_gfp_pbp_fusion_pattern(self):
         """Test pattern similar to 8ovp_A"""
-        from pyecod_mini.core.models import AlignmentData
         from pyecod_mini.core.decomposer import DomainReference
 
         # Create alignment data for chain blast evidence
         gfp_alignment = AlignmentData(
             query_seq="A" * 243,  # 252-494 = 243 residues
-            hit_seq="A" * 238,    # Reference length
+            hit_seq="A" * 238,  # Reference length
             query_start=252,
             query_end=494,
             hit_start=1,
-            hit_end=238
+            hit_end=238,
         )
 
         pbp_alignment = AlignmentData(
             query_seq="A" * 273,  # (2-248) + (491-517) = 247 + 27 = 274 residues
-            hit_seq="A" * 508,    # Reference length
+            hit_seq="A" * 508,  # Reference length
             query_start=2,
             query_end=517,
             hit_start=1,
-            hit_end=508
+            hit_end=508,
         )
 
         evidence = [
@@ -560,7 +558,7 @@ class TestRealWorldScenarios:
                 evalue=1e-100,
                 reference_length=238,
                 domain_id="6dgv_A",
-                alignment=gfp_alignment
+                alignment=gfp_alignment,
             ),
             # PBP domain (discontinuous)
             Evidence(
@@ -571,7 +569,7 @@ class TestRealWorldScenarios:
                 evalue=1e-80,
                 reference_length=508,
                 domain_id="2ia4_A",
-                alignment=pbp_alignment
+                alignment=pbp_alignment,
             ),
             # Overlapping domain blast hits
             create_complete_evidence(
@@ -580,8 +578,8 @@ class TestRealWorldScenarios:
                 query_range="100-300",
                 confidence=0.750,
                 reference_length=201,
-                domain_id="other_A"
-            )
+                domain_id="other_A",
+            ),
         ]
 
         # Mock domain definitions for decomposition
@@ -593,7 +591,7 @@ class TestRealWorldScenarios:
                     chain_id="A",
                     range=SequenceRange.parse("1-238"),
                     length=238,
-                    t_group="1.1.1"
+                    t_group="1.1.1",
                 )
             ],
             ("2ia4", "A"): [
@@ -603,14 +601,14 @@ class TestRealWorldScenarios:
                     chain_id="A",
                     range=SequenceRange.parse("1-247,275-301"),
                     length=274,
-                    t_group="2.2.2"
+                    t_group="2.2.2",
                 )
-            ]
+            ],
         }
 
-        domains = partition_domains(evidence,
-                                   sequence_length=569,
-                                   domain_definitions=domain_definitions)
+        domains = partition_domains(
+            evidence, sequence_length=569, domain_definitions=domain_definitions
+        )
 
         # Should get decomposed domains if decomposition works, or regular domain blast
         assert len(domains) >= 1

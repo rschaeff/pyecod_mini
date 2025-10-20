@@ -2,12 +2,14 @@
 """Parse alignment data from raw BLAST XML files"""
 
 import xml.etree.ElementTree as ET
-from typing import Dict, Tuple, Optional, Any
 from dataclasses import dataclass
+from typing import Any
+
 
 @dataclass
 class BlastAlignment:
     """BLAST alignment data"""
+
     query_seq: str
     hit_seq: str
     query_start: int
@@ -17,7 +19,10 @@ class BlastAlignment:
     hit_id: str
     evalue: float
 
-def parse_blast_xml(blast_xml_path: str, verbose: bool = False) -> Dict[Tuple[str, str], BlastAlignment]:
+
+def parse_blast_xml(
+    blast_xml_path: str, verbose: bool = False
+) -> dict[tuple[str, str], BlastAlignment]:
     """
     Parse raw BLAST XML to extract alignment data.
 
@@ -73,15 +78,39 @@ def parse_blast_xml(blast_xml_path: str, verbose: bool = False) -> Dict[Tuple[st
                 if hsp is not None:
                     try:
                         # Extract alignment data
-                        query_seq = hsp.find("Hsp_qseq").text if hsp.find("Hsp_qseq") is not None else ""
-                        hit_seq = hsp.find("Hsp_hseq").text if hsp.find("Hsp_hseq") is not None else ""
+                        query_seq = (
+                            hsp.find("Hsp_qseq").text if hsp.find("Hsp_qseq") is not None else ""
+                        )
+                        hit_seq = (
+                            hsp.find("Hsp_hseq").text if hsp.find("Hsp_hseq") is not None else ""
+                        )
 
-                        query_start = int(hsp.find("Hsp_query-from").text) if hsp.find("Hsp_query-from") is not None else 1
-                        query_end = int(hsp.find("Hsp_query-to").text) if hsp.find("Hsp_query-to") is not None else len(query_seq)
-                        hit_start = int(hsp.find("Hsp_hit-from").text) if hsp.find("Hsp_hit-from") is not None else 1
-                        hit_end = int(hsp.find("Hsp_hit-to").text) if hsp.find("Hsp_hit-to") is not None else len(hit_seq)
+                        query_start = (
+                            int(hsp.find("Hsp_query-from").text)
+                            if hsp.find("Hsp_query-from") is not None
+                            else 1
+                        )
+                        query_end = (
+                            int(hsp.find("Hsp_query-to").text)
+                            if hsp.find("Hsp_query-to") is not None
+                            else len(query_seq)
+                        )
+                        hit_start = (
+                            int(hsp.find("Hsp_hit-from").text)
+                            if hsp.find("Hsp_hit-from") is not None
+                            else 1
+                        )
+                        hit_end = (
+                            int(hsp.find("Hsp_hit-to").text)
+                            if hsp.find("Hsp_hit-to") is not None
+                            else len(hit_seq)
+                        )
 
-                        evalue = float(hsp.find("Hsp_evalue").text) if hsp.find("Hsp_evalue") is not None else 999.0
+                        evalue = (
+                            float(hsp.find("Hsp_evalue").text)
+                            if hsp.find("Hsp_evalue") is not None
+                            else 999.0
+                        )
 
                         alignment = BlastAlignment(
                             query_seq=query_seq,
@@ -91,7 +120,7 @@ def parse_blast_xml(blast_xml_path: str, verbose: bool = False) -> Dict[Tuple[st
                             hit_start=hit_start,
                             hit_end=hit_end,
                             hit_id=hit_def,
-                            evalue=evalue
+                            evalue=evalue,
                         )
 
                         alignments[(pdb_id, chain_id)] = alignment
@@ -103,17 +132,19 @@ def parse_blast_xml(blast_xml_path: str, verbose: bool = False) -> Dict[Tuple[st
                         continue
 
     # Only print summary if alignments were found or in verbose mode
-    if alignments_extracted > 0 or verbose:
-        if verbose:
-            print(f"BLAST parsing summary for {blast_xml_path}:")
-            print(f"  Iterations: {iterations_found}")
-            print(f"  Hits: {hits_found}")
-            print(f"  Alignments extracted: {alignments_extracted}")
+    if (alignments_extracted > 0 or verbose) and verbose:
+        print(f"BLAST parsing summary for {blast_xml_path}:")
+        print(f"  Iterations: {iterations_found}")
+        print(f"  Hits: {hits_found}")
+        print(f"  Alignments extracted: {alignments_extracted}")
         # For non-verbose, no output unless there's an issue
 
     return alignments
 
-def load_chain_blast_alignments(blast_dir: str, pdb_id: str, chain_id: str, verbose: bool = False) -> Dict[Tuple[str, str], BlastAlignment]:
+
+def load_chain_blast_alignments(
+    blast_dir: str, pdb_id: str, chain_id: str, verbose: bool = False
+) -> dict[tuple[str, str], BlastAlignment]:
     """
     Load chain BLAST alignments for a specific query.
 
@@ -143,7 +174,8 @@ def load_chain_blast_alignments(blast_dir: str, pdb_id: str, chain_id: str, verb
 
     return parse_blast_xml(blast_file, verbose=verbose)
 
-def get_blast_summary(alignments: Dict[Tuple[str, str], BlastAlignment]) -> Dict[str, Any]:
+
+def get_blast_summary(alignments: dict[tuple[str, str], BlastAlignment]) -> dict[str, Any]:
     """
     Get summary statistics for BLAST alignments.
 
@@ -154,12 +186,7 @@ def get_blast_summary(alignments: Dict[Tuple[str, str], BlastAlignment]) -> Dict
         Dictionary with summary statistics
     """
     if not alignments:
-        return {
-            'count': 0,
-            'avg_evalue': None,
-            'best_evalue': None,
-            'avg_coverage': None
-        }
+        return {"count": 0, "avg_evalue": None, "best_evalue": None, "avg_coverage": None}
 
     evalues = [a.evalue for a in alignments.values() if a.evalue < 100]
     coverages = []
@@ -167,12 +194,14 @@ def get_blast_summary(alignments: Dict[Tuple[str, str], BlastAlignment]) -> Dict
     for alignment in alignments.values():
         query_len = alignment.query_end - alignment.query_start + 1
         hit_len = alignment.hit_end - alignment.hit_start + 1
-        coverage = min(query_len, hit_len) / max(query_len, hit_len) if max(query_len, hit_len) > 0 else 0
+        coverage = (
+            min(query_len, hit_len) / max(query_len, hit_len) if max(query_len, hit_len) > 0 else 0
+        )
         coverages.append(coverage)
 
     return {
-        'count': len(alignments),
-        'avg_evalue': sum(evalues) / len(evalues) if evalues else None,
-        'best_evalue': min(evalues) if evalues else None,
-        'avg_coverage': sum(coverages) / len(coverages) if coverages else None
+        "count": len(alignments),
+        "avg_evalue": sum(evalues) / len(evalues) if evalues else None,
+        "best_evalue": min(evalues) if evalues else None,
+        "avg_coverage": sum(coverages) / len(coverages) if coverages else None,
     }

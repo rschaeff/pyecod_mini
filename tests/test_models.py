@@ -5,20 +5,21 @@ Model tests for mini_pyecod
 Tests the data model classes.
 """
 
-import pytest
-from pathlib import Path
-
 # Add parent directory to path for imports
 import sys
+from pathlib import Path
+
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pyecod_mini.core.models import Evidence, Domain, AlignmentData
+from pyecod_mini.core.models import AlignmentData, Domain, Evidence
 from pyecod_mini.core.sequence_range import SequenceRange
 
 
 class TestEvidenceModel:
     """Test the Evidence data model"""
-    
+
     @pytest.mark.unit
     def test_evidence_creation_minimal(self):
         """Test creating evidence with minimal fields"""
@@ -27,7 +28,7 @@ class TestEvidenceModel:
             source_pdb="1abc",
             query_range=SequenceRange.parse("10-100"),
         )
-        
+
         assert evidence.type == "domain_blast"
         assert evidence.source_pdb == "1abc"
         assert str(evidence.query_range) == "10-100"
@@ -55,8 +56,8 @@ class TestEvidenceModel:
                 query_start=1,
                 query_end=50,
                 hit_start=10,
-                hit_end=60
-            )
+                hit_end=60,
+            ),
         )
 
         assert evidence.type == "hhsearch"
@@ -75,7 +76,7 @@ class TestEvidenceModel:
             type="chain_blast",
             source_pdb="3ghi",
             query_range=SequenceRange.parse("10-50,60-100,150-200"),
-            domain_id="e3ghiA1"  # Proper domain_id example
+            domain_id="e3ghiA1",  # Proper domain_id example
         )
 
         assert evidence.query_range.is_discontinuous
@@ -96,7 +97,7 @@ class TestDomainModel:
                 source_pdb="test",
                 query_range=SequenceRange.parse("1-100"),
                 confidence=0.9,
-                domain_id="eTestA1"  # Proper domain_id
+                domain_id="eTestA1",  # Proper domain_id
             )
         ]
 
@@ -109,7 +110,7 @@ class TestDomainModel:
             evidence_items=evidence_items,
             t_group=None,
             h_group=None,
-            x_group=None
+            x_group=None,
         )
 
         assert domain.id == "d1"
@@ -128,7 +129,7 @@ class TestDomainModel:
             family="another_family",
             evidence_count=0,
             source="unknown",
-            evidence_items=[]
+            evidence_items=[],
         )
 
         assert len(domain.evidence_items) == 0
@@ -143,7 +144,7 @@ class TestDomainModel:
             family="disc_family",
             evidence_count=2,
             source="chain_blast_decomposed",
-            evidence_items=[]
+            evidence_items=[],
         )
 
         assert domain.range.is_discontinuous
@@ -162,7 +163,7 @@ class TestAlignmentDataModel:
             query_start=10,
             query_end=29,
             hit_start=1,
-            hit_end=20
+            hit_end=20,
         )
 
         assert alignment.query_seq == "ACDEFGHIKLMNPQRSTVWY"
@@ -181,7 +182,7 @@ class TestAlignmentDataModel:
             query_start=1,
             query_end=6,
             hit_start=1,
-            hit_end=7
+            hit_end=7,
         )
 
         assert "-" in alignment.query_seq
@@ -202,7 +203,7 @@ class TestModelRelationships:
             query_range=SequenceRange.parse("10-60"),
             confidence=0.8,
             t_group="1111.1.1",
-            domain_id="e1abcA1"
+            domain_id="e1abcA1",
         )
 
         evidence2 = Evidence(
@@ -211,7 +212,7 @@ class TestModelRelationships:
             query_range=SequenceRange.parse("15-55"),
             confidence=0.9,
             t_group="1111.1.1",
-            domain_id="e1abcA1"
+            domain_id="e1abcA1",
         )
 
         # Create domain from evidence
@@ -221,7 +222,7 @@ class TestModelRelationships:
             family=evidence1.t_group or evidence1.source_pdb,
             evidence_count=2,
             source=evidence1.type,
-            evidence_items=[evidence1, evidence2]
+            evidence_items=[evidence1, evidence2],
         )
 
         # Verify relationships
@@ -239,7 +240,7 @@ class TestModelRelationships:
             query_start=1,
             query_end=7,
             hit_start=10,
-            hit_end=16
+            hit_end=16,
         )
 
         evidence = Evidence(
@@ -247,7 +248,7 @@ class TestModelRelationships:
             source_pdb="2def",
             query_range=SequenceRange.parse("1-7"),
             alignment=alignment,
-            domain_id="2def_A"  # Chain-level identifier for chain BLAST
+            domain_id="2def_A",  # Chain-level identifier for chain BLAST
         )
 
         assert evidence.alignment is not None
@@ -261,11 +262,7 @@ class TestModelDefaults:
     @pytest.mark.unit
     def test_evidence_optional_fields(self):
         """Test that optional fields have proper defaults"""
-        evidence = Evidence(
-            type="test",
-            source_pdb="test",
-            query_range=SequenceRange.parse("1-10")
-        )
+        evidence = Evidence(type="test", source_pdb="test", query_range=SequenceRange.parse("1-10"))
 
         # Check defaults
         assert evidence.confidence == 0.0
@@ -287,7 +284,7 @@ class TestModelDefaults:
             family="test",
             evidence_count=0,
             source="test",
-            evidence_items=[]
+            evidence_items=[],
         )
 
         assert domain1.evidence_items == []
@@ -298,7 +295,7 @@ class TestModelDefaults:
             type="test",
             source_pdb="test",
             query_range=SequenceRange.parse("1-100"),
-            domain_id="eTestA1"
+            domain_id="eTestA1",
         )
 
         domain2 = Domain(
@@ -307,7 +304,7 @@ class TestModelDefaults:
             family="test",
             evidence_count=1,
             source="test",
-            evidence_items=[evidence]
+            evidence_items=[evidence],
         )
 
         assert len(domain2.evidence_items) == 1

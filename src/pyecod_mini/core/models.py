@@ -2,29 +2,33 @@
 """Enhanced models for domain analysis with boundary optimization and comprehensive provenance tracking"""
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Set, Tuple, Any, Dict
-from enum import Enum
 from datetime import datetime
+from enum import Enum
+from typing import Any, Optional
+
 from .sequence_range import SequenceRange
 
 
 class SegmentType(Enum):
     """Types of unassigned segments"""
-    NTERM = "nterm"          # Before first domain
-    CTERM = "cterm"          # After last domain
-    INTERSTITIAL = "inter"   # Between domains
+
+    NTERM = "nterm"  # Before first domain
+    CTERM = "cterm"  # After last domain
+    INTERSTITIAL = "inter"  # Between domains
     SINGLETON = "singleton"  # Single residue
 
 
 class FragmentSize(Enum):
     """Fragment size classification"""
-    SMALL = "small"          # < min_domain_size (candidate for merging)
-    LARGE = "large"          # >= min_domain_size (candidate for missed domain)
+
+    SMALL = "small"  # < min_domain_size (candidate for merging)
+    LARGE = "large"  # >= min_domain_size (candidate for missed domain)
 
 
 @dataclass
 class AlignmentData:
     """Alignment information for decomposition"""
+
     query_seq: str
     hit_seq: str
     query_start: int
@@ -36,6 +40,7 @@ class AlignmentData:
 @dataclass
 class Evidence:
     """Enhanced evidence model with boundary optimization and comprehensive provenance support"""
+
     type: str  # 'chain_blast', 'domain_blast', 'hhsearch'
     source_pdb: str  # '6dgv', '2ia4', etc.
     query_range: SequenceRange
@@ -66,7 +71,7 @@ class Evidence:
     source_chain_id: Optional[str] = None  # Chain ID from source PDB
     source_domain_uid: Optional[str] = None  # ECOD UID if available
 
-    def get_positions(self) -> Set[int]:
+    def get_positions(self) -> set[int]:
         """Get all sequence positions covered by this evidence"""
         return set(self.query_range.to_positions_simple())
 
@@ -81,51 +86,56 @@ class Evidence:
 
         return None
 
-    def get_quality_metrics(self) -> Dict[str, Any]:
+    def get_quality_metrics(self) -> dict[str, Any]:
         """Get comprehensive quality metrics for this evidence"""
         metrics = {
-            'confidence': self.confidence,
-            'evalue': self.evalue,
-            'reference_coverage': self.get_reference_coverage(),
-            'query_length': self.query_range.total_length,
-            'hit_length': self.hit_range.total_length if self.hit_range else None,
-            'reference_length': self.reference_length,
-            'discontinuous': self.discontinuous
+            "confidence": self.confidence,
+            "evalue": self.evalue,
+            "reference_coverage": self.get_reference_coverage(),
+            "query_length": self.query_range.total_length,
+            "hit_length": self.hit_range.total_length if self.hit_range else None,
+            "reference_length": self.reference_length,
+            "discontinuous": self.discontinuous,
         }
 
         # Type-specific metrics
-        if self.type == 'hhsearch':
+        if self.type == "hhsearch":
             # Calculate original probability from confidence
             original_prob = self.confidence / 0.95 * 100  # Reverse type multiplier
-            metrics['original_hhsearch_probability'] = original_prob
+            metrics["original_hhsearch_probability"] = original_prob
 
         return metrics
 
     def to_provenance_dict(self) -> dict:
         """Export evidence as provenance dictionary for XML/database storage"""
         return {
-            'source_type': self.type,
-            'source_id': f"{self.source_pdb}_{self.source_chain_id}" if self.source_chain_id else self.source_pdb,
-            'domain_id': self.domain_id,
-            'evalue': self.evalue,
-            'confidence': self.confidence,
-            'query_range': str(self.query_range),
-            'hit_range': str(self.hit_range) if self.hit_range else None,
-            'reference_coverage': self.get_reference_coverage(),
-            'hsp_count': self.hsp_count,
-            'discontinuous': self.discontinuous
+            "source_type": self.type,
+            "source_id": (
+                f"{self.source_pdb}_{self.source_chain_id}"
+                if self.source_chain_id
+                else self.source_pdb
+            ),
+            "domain_id": self.domain_id,
+            "evalue": self.evalue,
+            "confidence": self.confidence,
+            "query_range": str(self.query_range),
+            "hit_range": str(self.hit_range) if self.hit_range else None,
+            "reference_coverage": self.get_reference_coverage(),
+            "hsp_count": self.hsp_count,
+            "discontinuous": self.discontinuous,
         }
 
 
 @dataclass
 class Domain:
     """Enhanced domain model with spatial tracking and comprehensive provenance"""
+
     id: str
     range: SequenceRange
     family: str  # PDB or classification
     evidence_count: int
     source: str  # 'blast' or 'hhsearch'
-    evidence_items: List[Evidence]
+    evidence_items: list[Evidence]
 
     # ECOD hierarchy fields
     x_group: Optional[str] = None
@@ -133,13 +143,15 @@ class Domain:
     t_group: Optional[str] = None
 
     # Spatial tracking for boundary optimization
-    assigned_positions: Set[int] = field(default_factory=set)
+    assigned_positions: set[int] = field(default_factory=set)
 
     # PROVENANCE TRACKING: Enhanced domain provenance
     primary_evidence: Optional[Evidence] = None  # The main evidence that created this domain
     reference_ecod_domain_id: Optional[str] = None  # Final reference domain assigned
     original_range: Optional[SequenceRange] = None  # Range before boundary optimization
-    optimization_actions: List[str] = field(default_factory=list)  # Actions taken during optimization
+    optimization_actions: list[str] = field(
+        default_factory=list
+    )  # Actions taken during optimization
 
     # Context for provenance
     creation_timestamp: Optional[datetime] = None
@@ -191,46 +203,45 @@ class Domain:
             return 0.0
         return max(ev.confidence for ev in self.evidence_items)
 
-    def get_positions(self) -> Set[int]:
+    def get_positions(self) -> set[int]:
         """Get all sequence positions covered by this domain"""
         return self.assigned_positions.copy()
 
-    def add_positions(self, positions: Set[int]) -> None:
+    def add_positions(self, positions: set[int]) -> None:
         """Add positions to this domain (for fragment merging)"""
         self.assigned_positions.update(positions)
         # Update the range representation
         all_positions = sorted(self.assigned_positions)
         self.range = SequenceRange.from_positions(all_positions)
 
-    def remove_positions(self, positions: Set[int]) -> None:
+    def remove_positions(self, positions: set[int]) -> None:
         """Remove positions from this domain (for overlap resolution)"""
         self.assigned_positions.difference_update(positions)
         if self.assigned_positions:
             all_positions = sorted(self.assigned_positions)
             self.range = SequenceRange.from_positions(all_positions)
 
-    def overlaps_with(self, other: 'Domain', tolerance: int = 0) -> bool:
+    def overlaps_with(self, other: "Domain", tolerance: int = 0) -> bool:
         """Check if this domain overlaps with another domain"""
         if tolerance == 0:
             return bool(self.assigned_positions.intersection(other.assigned_positions))
-        else:
-            # Extended overlap check with tolerance
-            extended_positions = set()
-            for pos in self.assigned_positions:
-                extended_positions.update(range(pos - tolerance, pos + tolerance + 1))
-            return bool(extended_positions.intersection(other.assigned_positions))
+        # Extended overlap check with tolerance
+        extended_positions = set()
+        for pos in self.assigned_positions:
+            extended_positions.update(range(pos - tolerance, pos + tolerance + 1))
+        return bool(extended_positions.intersection(other.assigned_positions))
 
-    def distance_to(self, other: 'Domain') -> int:
+    def distance_to(self, other: "Domain") -> int:
         """Get minimum distance between this domain and another domain"""
         if self.overlaps_with(other):
             return 0
 
-        min_distance = float('inf')
+        min_distance = float("inf")
         for pos1 in self.assigned_positions:
             for pos2 in other.assigned_positions:
                 min_distance = min(min_distance, abs(pos1 - pos2))
 
-        return int(min_distance) if min_distance != float('inf') else -1
+        return int(min_distance) if min_distance != float("inf") else -1
 
     # PROVENANCE TRACKING: Methods for tracking optimization
     def record_optimization_action(self, action: str, details: Optional[str] = None) -> None:
@@ -247,27 +258,28 @@ class Domain:
     def get_optimization_summary(self) -> dict:
         """Get summary of all optimizations performed on this domain"""
         return {
-            'was_optimized': self.was_optimized(),
-            'original_range': str(self.original_range),
-            'final_range': str(self.range),
-            'actions': self.optimization_actions.copy(),
-            'position_change': len(self.assigned_positions) - len(set(self.original_range.to_positions_simple()))
+            "was_optimized": self.was_optimized(),
+            "original_range": str(self.original_range),
+            "final_range": str(self.range),
+            "actions": self.optimization_actions.copy(),
+            "position_change": len(self.assigned_positions)
+            - len(set(self.original_range.to_positions_simple())),
         }
 
-    def get_quality_assessment(self) -> Dict[str, Any]:
+    def get_quality_assessment(self) -> dict[str, Any]:
         """Get comprehensive quality assessment for this domain"""
         assessment = {
-            'domain_id': self.id,
-            'primary_evidence_quality': None,
-            'all_evidence_quality': [],
-            'overall_assessment': 'unknown'
+            "domain_id": self.id,
+            "primary_evidence_quality": None,
+            "all_evidence_quality": [],
+            "overall_assessment": "unknown",
         }
 
         if self.primary_evidence:
-            assessment['primary_evidence_quality'] = self.primary_evidence.get_quality_metrics()
+            assessment["primary_evidence_quality"] = self.primary_evidence.get_quality_metrics()
 
         for evidence in self.evidence_items:
-            assessment['all_evidence_quality'].append(evidence.get_quality_metrics())
+            assessment["all_evidence_quality"].append(evidence.get_quality_metrics())
 
         # Overall assessment based on primary evidence
         if self.primary_evidence:
@@ -276,43 +288,43 @@ class Domain:
 
             issues = []
             if confidence < 0.5:
-                issues.append('low_confidence')
+                issues.append("low_confidence")
             if ref_coverage is not None and ref_coverage < 0.5:
-                issues.append('poor_reference_coverage')
+                issues.append("poor_reference_coverage")
             if self.primary_evidence.evalue is not None and self.primary_evidence.evalue > 1.0:
-                issues.append('poor_evalue')
+                issues.append("poor_evalue")
 
             if not issues:
-                assessment['overall_assessment'] = 'good'
+                assessment["overall_assessment"] = "good"
             elif len(issues) == 1:
-                assessment['overall_assessment'] = 'questionable'
+                assessment["overall_assessment"] = "questionable"
             else:
-                assessment['overall_assessment'] = 'poor'
+                assessment["overall_assessment"] = "poor"
 
-            assessment['quality_issues'] = issues
+            assessment["quality_issues"] = issues
 
         return assessment
 
     def to_provenance_dict(self) -> dict:
         """Export domain as provenance dictionary for XML/database storage"""
         base_dict = {
-            'id': self.id,
-            'range': str(self.range),
-            'family': self.family,
-            'source': self.source,
-            'evidence_count': self.evidence_count,
-            'confidence': self.confidence,
-            't_group': self.t_group,
-            'h_group': self.h_group,
-            'x_group': self.x_group,
-            'reference_ecod_domain_id': self.reference_ecod_domain_id,
-            'was_optimized': self.was_optimized(),
-            'original_range': str(self.original_range),
-            'optimization_actions': self.optimization_actions.copy()
+            "id": self.id,
+            "range": str(self.range),
+            "family": self.family,
+            "source": self.source,
+            "evidence_count": self.evidence_count,
+            "confidence": self.confidence,
+            "t_group": self.t_group,
+            "h_group": self.h_group,
+            "x_group": self.x_group,
+            "reference_ecod_domain_id": self.reference_ecod_domain_id,
+            "was_optimized": self.was_optimized(),
+            "original_range": str(self.original_range),
+            "optimization_actions": self.optimization_actions.copy(),
         }
 
         if self.primary_evidence:
-            base_dict['primary_evidence'] = self.primary_evidence.to_provenance_dict()
+            base_dict["primary_evidence"] = self.primary_evidence.to_provenance_dict()
 
         return base_dict
 
@@ -320,16 +332,17 @@ class Domain:
 @dataclass
 class UnassignedSegment:
     """Represents a gap between domains for boundary optimization"""
+
     start: int
     end: int
-    positions: Set[int] = field(default_factory=set)
+    positions: set[int] = field(default_factory=set)
     segment_type: SegmentType = SegmentType.INTERSTITIAL
     fragment_size: FragmentSize = FragmentSize.SMALL
 
     # Spatial relationships
     preceding_domain: Optional[Domain] = None  # Domain that ends before this segment
     following_domain: Optional[Domain] = None  # Domain that starts after this segment
-    neighboring_domains: List[Domain] = field(default_factory=list)  # All nearby domains
+    neighboring_domains: list[Domain] = field(default_factory=list)  # All nearby domains
 
     def __post_init__(self):
         """Initialize positions from start/end"""
@@ -357,26 +370,24 @@ class UnassignedSegment:
         return SequenceRange.from_positions(sorted(self.positions))
 
     @classmethod
-    def from_positions(cls, positions: List[int], min_domain_size: int = 25) -> 'UnassignedSegment':
+    def from_positions(cls, positions: list[int], min_domain_size: int = 25) -> "UnassignedSegment":
         """Create UnassignedSegment from list of positions"""
         if not positions:
-            raise ValueError("Cannot create segment from empty positions")
+            msg = "Cannot create segment from empty positions"
+            raise ValueError(msg)
 
         positions_set = set(positions)
         start = min(positions)
         end = max(positions)
 
         # Determine fragment size
-        fragment_size = FragmentSize.SMALL if len(positions) < min_domain_size else FragmentSize.LARGE
-
-        return cls(
-            start=start,
-            end=end,
-            positions=positions_set,
-            fragment_size=fragment_size
+        fragment_size = (
+            FragmentSize.SMALL if len(positions) < min_domain_size else FragmentSize.LARGE
         )
 
-    def classify_type(self, all_domains: List[Domain], sequence_length: int) -> SegmentType:
+        return cls(start=start, end=end, positions=positions_set, fragment_size=fragment_size)
+
+    def classify_type(self, all_domains: list[Domain], sequence_length: int) -> SegmentType:
         """Classify this segment based on its position relative to domains"""
         if self.is_singleton:
             return SegmentType.SINGLETON
@@ -388,15 +399,14 @@ class UnassignedSegment:
 
         if not domains_before and domains_after:
             return SegmentType.NTERM
-        elif domains_before and not domains_after:
+        if domains_before and not domains_after:
             return SegmentType.CTERM
-        elif domains_before and domains_after:
+        if domains_before and domains_after:
             return SegmentType.INTERSTITIAL
-        else:
-            # No domains at all - treat as N-terminal
-            return SegmentType.NTERM
+        # No domains at all - treat as N-terminal
+        return SegmentType.NTERM
 
-    def find_neighbors(self, all_domains: List[Domain], tolerance: int = 5) -> List[Domain]:
+    def find_neighbors(self, all_domains: list[Domain], tolerance: int = 5) -> list[Domain]:
         """Find domains within tolerance distance of this segment"""
         neighbors = []
 
@@ -423,20 +433,21 @@ class UnassignedSegment:
 @dataclass
 class DomainLayout:
     """Manages spatial relationships between domains and gaps for boundary optimization"""
+
     sequence_length: int
-    domains: List[Domain] = field(default_factory=list)
-    unassigned_segments: List[UnassignedSegment] = field(default_factory=list)
+    domains: list[Domain] = field(default_factory=list)
+    unassigned_segments: list[UnassignedSegment] = field(default_factory=list)
 
     # Tracking for optimization
-    used_positions: Set[int] = field(default_factory=set)
-    unused_positions: Set[int] = field(default_factory=set)
+    used_positions: set[int] = field(default_factory=set)
+    unused_positions: set[int] = field(default_factory=set)
 
     def __post_init__(self):
         """Initialize position tracking"""
         self.update_position_tracking()
 
     @classmethod
-    def from_domains(cls, domains: List[Domain], sequence_length: int) -> 'DomainLayout':
+    def from_domains(cls, domains: list[Domain], sequence_length: int) -> "DomainLayout":
         """Create layout from a list of domains"""
         layout = cls(sequence_length=sequence_length, domains=domains.copy())
         layout.analyze_gaps()
@@ -469,7 +480,9 @@ class DomainLayout:
                 current_segment_end = pos
             else:
                 # Gap - finish current segment and start new one
-                segment = self._create_segment(current_segment_start, current_segment_end, min_domain_size)
+                segment = self._create_segment(
+                    current_segment_start, current_segment_end, min_domain_size
+                )
                 self.unassigned_segments.append(segment)
                 current_segment_start = pos
                 current_segment_end = pos
@@ -488,11 +501,7 @@ class DomainLayout:
         length = end - start + 1
         fragment_size = FragmentSize.SMALL if length < min_domain_size else FragmentSize.LARGE
 
-        return UnassignedSegment(
-            start=start,
-            end=end,
-            fragment_size=fragment_size
-        )
+        return UnassignedSegment(start=start, end=end, fragment_size=fragment_size)
 
     def add_domain(self, domain: Domain) -> None:
         """Add a domain to the layout"""
@@ -509,8 +518,7 @@ class DomainLayout:
         """Merge an unassigned segment with a domain (with provenance tracking)"""
         # Record the optimization action
         domain.record_optimization_action(
-            "merge_segment",
-            f"{segment.segment_type.value}_{segment.start}-{segment.end}"
+            "merge_segment", f"{segment.segment_type.value}_{segment.start}-{segment.end}"
         )
 
         domain.add_positions(segment.positions)
@@ -520,9 +528,13 @@ class DomainLayout:
         if segment in self.unassigned_segments:
             self.unassigned_segments.remove(segment)
 
-    def split_segment_between_domains(self, segment: UnassignedSegment,
-                                    domain1: Domain, domain2: Domain,
-                                    split_positions: Tuple[Set[int], Set[int]]) -> None:
+    def split_segment_between_domains(
+        self,
+        segment: UnassignedSegment,
+        domain1: Domain,
+        domain2: Domain,
+        split_positions: tuple[set[int], set[int]],
+    ) -> None:
         """Split a segment between two domains (with provenance tracking)"""
         positions_to_domain1, positions_to_domain2 = split_positions
 
@@ -530,13 +542,13 @@ class DomainLayout:
         if positions_to_domain1:
             domain1.record_optimization_action(
                 "split_merge",
-                f"gained_{len(positions_to_domain1)}_from_{segment.start}-{segment.end}"
+                f"gained_{len(positions_to_domain1)}_from_{segment.start}-{segment.end}",
             )
 
         if positions_to_domain2:
             domain2.record_optimization_action(
                 "split_merge",
-                f"gained_{len(positions_to_domain2)}_from_{segment.start}-{segment.end}"
+                f"gained_{len(positions_to_domain2)}_from_{segment.start}-{segment.end}",
             )
 
         # Add positions to respective domains
@@ -552,22 +564,26 @@ class DomainLayout:
     def get_coverage_stats(self) -> dict:
         """Get coverage statistics for this layout"""
         return {
-            'total_residues': self.sequence_length,
-            'assigned_residues': len(self.used_positions),
-            'unassigned_residues': len(self.unused_positions),
-            'coverage_percent': len(self.used_positions) / self.sequence_length * 100 if self.sequence_length > 0 else 0,
-            'num_domains': len(self.domains),
-            'num_gaps': len(self.unassigned_segments),
-            'small_fragments': len([s for s in self.unassigned_segments if s.is_small_fragment]),
-            'large_gaps': len([s for s in self.unassigned_segments if not s.is_small_fragment])
+            "total_residues": self.sequence_length,
+            "assigned_residues": len(self.used_positions),
+            "unassigned_residues": len(self.unused_positions),
+            "coverage_percent": (
+                len(self.used_positions) / self.sequence_length * 100
+                if self.sequence_length > 0
+                else 0
+            ),
+            "num_domains": len(self.domains),
+            "num_gaps": len(self.unassigned_segments),
+            "small_fragments": len([s for s in self.unassigned_segments if s.is_small_fragment]),
+            "large_gaps": len([s for s in self.unassigned_segments if not s.is_small_fragment]),
         }
 
-    def get_overlapping_domains(self, tolerance: int = 0) -> List[Tuple[Domain, Domain]]:
+    def get_overlapping_domains(self, tolerance: int = 0) -> list[tuple[Domain, Domain]]:
         """Find pairs of domains that overlap"""
         overlapping_pairs = []
 
         for i, domain1 in enumerate(self.domains):
-            for domain2 in self.domains[i+1:]:
+            for domain2 in self.domains[i + 1 :]:
                 if domain1.overlaps_with(domain2, tolerance):
                     overlapping_pairs.append((domain1, domain2))
 
@@ -587,28 +603,24 @@ class DomainLayout:
                 if domain1.confidence > domain2.confidence:
                     domain2.remove_positions(overlap_positions)
                     domain2.record_optimization_action(
-                        "overlap_trim",
-                        f"lost_{len(overlap_positions)}_to_{domain1.id}"
+                        "overlap_trim", f"lost_{len(overlap_positions)}_to_{domain1.id}"
                     )
                 elif domain2.confidence > domain1.confidence:
                     domain1.remove_positions(overlap_positions)
                     domain1.record_optimization_action(
-                        "overlap_trim",
-                        f"lost_{len(overlap_positions)}_to_{domain2.id}"
+                        "overlap_trim", f"lost_{len(overlap_positions)}_to_{domain2.id}"
                     )
                 else:
                     # Equal confidence - give to the larger domain
                     if len(domain1.assigned_positions) >= len(domain2.assigned_positions):
                         domain2.remove_positions(overlap_positions)
                         domain2.record_optimization_action(
-                            "overlap_trim",
-                            f"lost_{len(overlap_positions)}_to_larger_{domain1.id}"
+                            "overlap_trim", f"lost_{len(overlap_positions)}_to_larger_{domain1.id}"
                         )
                     else:
                         domain1.remove_positions(overlap_positions)
                         domain1.record_optimization_action(
-                            "overlap_trim",
-                            f"lost_{len(overlap_positions)}_to_larger_{domain2.id}"
+                            "overlap_trim", f"lost_{len(overlap_positions)}_to_larger_{domain2.id}"
                         )
 
                 overlaps_resolved += 1
@@ -618,29 +630,29 @@ class DomainLayout:
 
         return overlaps_resolved
 
-    def get_quality_summary(self) -> Dict[str, Any]:
+    def get_quality_summary(self) -> dict[str, Any]:
         """Get quality summary for all domains in this layout"""
         if not self.domains:
-            return {'total_domains': 0, 'quality_distribution': {}}
+            return {"total_domains": 0, "quality_distribution": {}}
 
-        quality_counts = {'good': 0, 'questionable': 0, 'poor': 0, 'unknown': 0}
+        quality_counts = {"good": 0, "questionable": 0, "poor": 0, "unknown": 0}
         domain_assessments = []
 
         for domain in self.domains:
             assessment = domain.get_quality_assessment()
             domain_assessments.append(assessment)
 
-            overall = assessment.get('overall_assessment', 'unknown')
+            overall = assessment.get("overall_assessment", "unknown")
             quality_counts[overall] = quality_counts.get(overall, 0) + 1
 
         return {
-            'total_domains': len(self.domains),
-            'quality_distribution': quality_counts,
-            'domain_assessments': domain_assessments,
-            'quality_percentage': {
+            "total_domains": len(self.domains),
+            "quality_distribution": quality_counts,
+            "domain_assessments": domain_assessments,
+            "quality_percentage": {
                 quality: (count / len(self.domains)) * 100
                 for quality, count in quality_counts.items()
-            }
+            },
         }
 
 
@@ -648,6 +660,7 @@ class DomainLayout:
 @dataclass
 class PartitionMetadata:
     """Metadata for an entire domain partition with comprehensive provenance"""
+
     pdb_id: str
     chain_id: str
 
@@ -677,6 +690,7 @@ class PartitionMetadata:
 def evidence_confidence(self) -> float:
     """Get confidence value for overlap resolution"""
     return self.confidence
+
 
 # Extend Evidence class
 Evidence.confidence_value = evidence_confidence

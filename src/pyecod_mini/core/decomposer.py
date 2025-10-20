@@ -1,25 +1,30 @@
 # mini/decomposer.py
 """Chain BLAST decomposition using alignment-based mapping"""
 
-import os
-from typing import List, Dict, Tuple, Optional, Set
-from dataclasses import dataclass
 import csv
+import os
+from dataclasses import dataclass
+from typing import Optional
+
 from .models import Evidence
-from .sequence_range import SequenceRange, SequenceSegment
+from .sequence_range import SequenceRange
+
 
 @dataclass
 class BlacklistEntry:
     """Blacklisted reference chain entry"""
+
     pdb_id: str
     chain_id: str
     reason: str
     date_added: str = ""
     added_by: str = ""
 
+
 @dataclass
 class DomainReference:
     """Reference domain information from database dump"""
+
     domain_id: str
     pdb_id: str
     chain_id: str
@@ -28,8 +33,10 @@ class DomainReference:
     t_group: Optional[str] = None
     h_group: Optional[str] = None
 
-def load_domain_definitions(csv_path: str, verbose: bool = False,
-                           blacklist_path: str = None) -> Dict[Tuple[str, str], List[DomainReference]]:
+
+def load_domain_definitions(
+    csv_path: str, verbose: bool = False, blacklist_path: str = None
+) -> dict[tuple[str, str], list[DomainReference]]:
     """
     Load domain definitions from database dump CSV with blacklist support
 
@@ -48,11 +55,11 @@ def load_domain_definitions(csv_path: str, verbose: bool = False,
     blacklisted_count = 0
 
     try:
-        with open(csv_path, 'r') as f:
+        with open(csv_path) as f:
             reader = csv.DictReader(f)
             for row in reader:
-                pdb_id = row['pdb_id'].lower()
-                chain_id = row['chain_id']
+                pdb_id = row["pdb_id"].lower()
+                chain_id = row["chain_id"]
 
                 # Check blacklist
                 if (pdb_id, chain_id) in blacklist:
@@ -61,12 +68,12 @@ def load_domain_definitions(csv_path: str, verbose: bool = False,
                         print(f"    Blacklisted: {pdb_id}_{chain_id}")
                     continue
 
-                if verbose and pdb_id == '2ia4':
+                if verbose and pdb_id == "2ia4":
                     print(f"    Processing 2ia4 entry: {pdb_id}_{chain_id}")
 
                 # Parse range (existing code continues unchanged...)
                 try:
-                    range_obj = SequenceRange.parse(row['range'])
+                    range_obj = SequenceRange.parse(row["range"])
                 except ValueError as e:
                     if verbose:
                         print(f"Invalid range for {row['domain_id']}: {row['range']} - {e}")
@@ -75,7 +82,7 @@ def load_domain_definitions(csv_path: str, verbose: bool = False,
 
                 # Validate length
                 try:
-                    length = int(row['length'])
+                    length = int(row["length"])
                     if length <= 0:
                         invalid_count += 1
                         if verbose:
@@ -88,13 +95,13 @@ def load_domain_definitions(csv_path: str, verbose: bool = False,
                     continue
 
                 domain = DomainReference(
-                    domain_id=row['domain_id'],
+                    domain_id=row["domain_id"],
                     pdb_id=pdb_id,
                     chain_id=chain_id,
                     range=range_obj,
                     length=length,
-                    t_group=row.get('t_group'),
-                    h_group=row.get('h_group')
+                    t_group=row.get("t_group"),
+                    h_group=row.get("h_group"),
                 )
 
                 key = (pdb_id, chain_id)
@@ -113,12 +120,11 @@ def load_domain_definitions(csv_path: str, verbose: bool = False,
             print(f"Warning: Skipped {invalid_count} domains with invalid data")
 
         if verbose:
-            ia4_chains = [k for k in domains_by_chain.keys() if k[0] == "2ia4"]
+            ia4_chains = [k for k in domains_by_chain if k[0] == "2ia4"]
             if ia4_chains:
                 print(f"2ia4 chains available: {ia4_chains}")
             else:
                 print("No 2ia4 chains found in domain definitions")
-
 
     except FileNotFoundError:
         print(f"Warning: Domain definitions file not found: {csv_path}")
@@ -127,7 +133,8 @@ def load_domain_definitions(csv_path: str, verbose: bool = False,
 
     return domains_by_chain
 
-def load_reference_blacklist(blacklist_path: str, verbose: bool = False) -> Set[Tuple[str, str]]:
+
+def load_reference_blacklist(blacklist_path: str, verbose: bool = False) -> set[tuple[str, str]]:
     """
     Load reference blacklist from CSV file
 
@@ -147,28 +154,30 @@ def load_reference_blacklist(blacklist_path: str, verbose: bool = False) -> Set[
         return blacklist
 
     try:
-        with open(blacklist_path, 'r') as f:
+        with open(blacklist_path) as f:
             reader = csv.DictReader(f)
             for row in reader:
                 # Skip empty rows
                 if not row or not any(row.values()):
                     continue
-                
-                pdb_id = (row.get('pdb_id') or '').lower().strip()
-                chain_id = (row.get('chain_id') or '').strip()
-                reason = (row.get('reason') or '').strip()
-                date_added = (row.get('date_added') or '').strip()
-                added_by = (row.get('added_by') or '').strip()
+
+                pdb_id = (row.get("pdb_id") or "").lower().strip()
+                chain_id = (row.get("chain_id") or "").strip()
+                reason = (row.get("reason") or "").strip()
+                date_added = (row.get("date_added") or "").strip()
+                added_by = (row.get("added_by") or "").strip()
 
                 if pdb_id and chain_id:
                     blacklist.add((pdb_id, chain_id))
-                    entries.append(BlacklistEntry(
-                        pdb_id=pdb_id,
-                        chain_id=chain_id,
-                        reason=reason,
-                        date_added=date_added,
-                        added_by=added_by
-                    ))
+                    entries.append(
+                        BlacklistEntry(
+                            pdb_id=pdb_id,
+                            chain_id=chain_id,
+                            reason=reason,
+                            date_added=date_added,
+                            added_by=added_by,
+                        )
+                    )
 
         if verbose:
             print(f"Loaded {len(blacklist)} blacklisted reference chains:")
@@ -180,39 +189,47 @@ def load_reference_blacklist(blacklist_path: str, verbose: bool = False) -> Set[
 
     return blacklist
 
-def build_alignment_mapping(query_str: str, hit_str: str,
-                           query_start: int, hit_start: int) -> Dict[int, int]:
+
+def build_alignment_mapping(
+    query_str: str, hit_str: str, query_start: int, hit_start: int
+) -> dict[int, int]:
     """
     Build position mapping from query to hit using alignment strings
     FIXED: Ensure consistent 0-based indexing
     """
     if len(query_str) != len(hit_str):
-        raise ValueError(f"Alignment strings have different lengths: {len(query_str)} vs {len(hit_str)}")
+        msg = f"Alignment strings have different lengths: {len(query_str)} vs {len(hit_str)}"
+        raise ValueError(
+            msg
+        )
 
     mapping = {}
     query_pos = query_start - 1  # Convert to 0-based
-    hit_pos = hit_start - 1      # Convert to 0-based
+    hit_pos = hit_start - 1  # Convert to 0-based
 
     for q_char, h_char in zip(query_str, hit_str):
         # Record mapping when both are non-gaps (BEFORE advancing positions)
-        if q_char != '-' and h_char != '-':
+        if q_char != "-" and h_char != "-":
             mapping[query_pos] = hit_pos
 
         # Advance positions for non-gap characters
-        if q_char != '-':
+        if q_char != "-":
             query_pos += 1
-        if h_char != '-':
+        if h_char != "-":
             hit_pos += 1
 
     return mapping
 
-def decompose_chain_blast_with_mapping(evidence: Evidence,
-                                       hit_query_str: str,
-                                       hit_hit_str: str,
-                                       query_start: int,
-                                       hit_start: int,
-                                       domain_refs: List[DomainReference],
-                                       verbose: bool = False) -> List[Evidence]:
+
+def decompose_chain_blast_with_mapping(
+    evidence: Evidence,
+    hit_query_str: str,
+    hit_hit_str: str,
+    query_start: int,
+    hit_start: int,
+    domain_refs: list[DomainReference],
+    verbose: bool = False,
+) -> list[Evidence]:
     """
     Decompose chain BLAST hit using alignment mapping to reference domains
 
@@ -233,8 +250,6 @@ def decompose_chain_blast_with_mapping(evidence: Evidence,
             print(f"  Warning: No domain references for {evidence.source_pdb}")
         return [evidence]  # No decomposition possible
 
-
-
     # Build query -> hit position mapping
     try:
         pos_mapping = build_alignment_mapping(hit_query_str, hit_hit_str, query_start, hit_start)
@@ -254,10 +269,10 @@ def decompose_chain_blast_with_mapping(evidence: Evidence,
         if ref_domain.length <= 0:
             skipped_count += 1
             if verbose:
-                print(f"  Warning: Invalid reference length for {ref_domain.domain_id}: {ref_domain.length}")
+                print(
+                    f"  Warning: Invalid reference length for {ref_domain.domain_id}: {ref_domain.length}"
+                )
             continue
-
-
 
         # Get all positions in this reference domain
         ref_positions = set(ref_domain.range.to_positions_simple())
@@ -271,7 +286,9 @@ def decompose_chain_blast_with_mapping(evidence: Evidence,
 
         if len(query_positions) < 20:  # Skip tiny mapped regions
             if verbose:
-                print(f"  Skipping {ref_domain.domain_id}: only {len(query_positions)} positions mapped")
+                print(
+                    f"  Skipping {ref_domain.domain_id}: only {len(query_positions)} positions mapped"
+                )
             continue
 
         # Create range from mapped positions
@@ -287,7 +304,9 @@ def decompose_chain_blast_with_mapping(evidence: Evidence,
 
         if verbose:
             t_group_info = f", T-group={ref_domain.t_group}" if ref_domain.t_group else ""
-            print(f"  Decomposed to {ref_domain.domain_id}: {query_range} (coverage={coverage:.1%}{t_group_info})")
+            print(
+                f"  Decomposed to {ref_domain.domain_id}: {query_range} (coverage={coverage:.1%}{t_group_info})"
+            )
 
         # Create decomposed evidence
         new_evidence = Evidence(
@@ -297,7 +316,6 @@ def decompose_chain_blast_with_mapping(evidence: Evidence,
             confidence=evidence.confidence * coverage,
             evalue=evidence.evalue,
             domain_id=ref_domain.domain_id,
-
             # NEW PROVENANCE FIELDS:
             source_chain_id=evidence.source_chain_id,
             hit_range=SequenceRange.from_positions(
@@ -308,22 +326,25 @@ def decompose_chain_blast_with_mapping(evidence: Evidence,
             reference_length=ref_domain.length,
             alignment_coverage=coverage,
             t_group=ref_domain.t_group,
-            h_group=ref_domain.h_group
+            h_group=ref_domain.h_group,
         )
 
         decomposed.append(new_evidence)
 
         if verbose:
-            print(f"  Decomposed to {ref_domain.domain_id}: {query_range} (coverage={coverage:.1%})")
+            print(
+                f"  Decomposed to {ref_domain.domain_id}: {query_range} (coverage={coverage:.1%})"
+            )
 
     if skipped_count > 0 and not verbose:
         print(f"  Skipped {skipped_count} domains with invalid reference lengths")
 
     return decomposed if decomposed else [evidence]
 
-def decompose_chain_blast_discontinuous(evidence: Evidence,
-                                       min_domain: int = 50,
-                                       verbose: bool = False) -> List[Evidence]:
+
+def decompose_chain_blast_discontinuous(
+    evidence: Evidence, min_domain: int = 50, verbose: bool = False
+) -> list[Evidence]:
     """
     Decompose a discontinuous chain BLAST hit by segments.
 
@@ -361,13 +382,13 @@ def decompose_chain_blast_discontinuous(evidence: Evidence,
                 reference_length=None,  # Unknown without reference data
                 alignment_coverage=None,  # Cannot calculate without reference
                 t_group=evidence.t_group,  # Preserve if available
-                h_group=evidence.h_group   # Preserve if available
+                h_group=evidence.h_group,  # Preserve if available
             )
             decomposed.append(new_evidence)
 
             if verbose:
                 print(f"  Decomposed discontinuous segment {i+1}: {segment}")
-                print(f"    Note: No reference length available for coverage calculation")
+                print("    Note: No reference length available for coverage calculation")
 
     if not decomposed and verbose:
         print(f"  No segments >= {min_domain} residues in discontinuous hit")

@@ -7,10 +7,10 @@ and discontinuous domains. Based on battle-tested Perl Range.pm module with
 modern Python design principles.
 """
 
-from dataclasses import dataclass
-from typing import List, Tuple, Optional, Set
-import re
 import logging
+import re
+from dataclasses import dataclass
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +30,11 @@ class SequenceSegment:
 
     def __post_init__(self) -> None:
         if self.start > self.end:
-            raise ValueError(f"Invalid segment: start {self.start} > end {self.end}")
+            msg = f"Invalid segment: start {self.start} > end {self.end}"
+            raise ValueError(msg)
         if self.start < 1:
-            raise ValueError(f"Invalid segment: start {self.start} < 1")
+            msg = f"Invalid segment: start {self.start} < 1"
+            raise ValueError(msg)
 
     @property
     def length(self) -> int:
@@ -68,14 +70,14 @@ class SequenceSegment:
         # Calculate gap (positive = space between, negative = overlap)
         if self.end < other.start:
             return other.start - self.end - 1
-        else:
-            return self.start - other.end - 1
+        return self.start - other.end - 1
 
     def merge_with(self, other: "SequenceSegment") -> "SequenceSegment":
         """Merge this segment with another (must be same chain)"""
         if self.chain != other.chain:
+            msg = f"Cannot merge segments from different chains: {self.chain} vs {other.chain}"
             raise ValueError(
-                f"Cannot merge segments from different chains: {self.chain} vs {other.chain}"
+                msg
             )
 
         return SequenceSegment(
@@ -86,8 +88,7 @@ class SequenceSegment:
         """String representation for debugging"""
         if self.chain:
             return f"{self.chain}:{self.start}-{self.end}"
-        else:
-            return f"{self.start}-{self.end}"
+        return f"{self.start}-{self.end}"
 
 
 class SequenceRange:
@@ -98,7 +99,7 @@ class SequenceRange:
     Replaces scattered range parsing throughout codebase.
     """
 
-    def __init__(self, segments: List[SequenceSegment]):
+    def __init__(self, segments: list[SequenceSegment]):
         """
         Create a sequence range from segments.
 
@@ -106,11 +107,12 @@ class SequenceRange:
             segments: List of SequenceSegment objects
         """
         if not segments:
-            raise ValueError("SequenceRange requires at least one segment")
+            msg = "SequenceRange requires at least one segment"
+            raise ValueError(msg)
 
         self.segments = self._validate_and_sort(segments)
 
-    def _validate_and_sort(self, segments: List[SequenceSegment]) -> List[SequenceSegment]:
+    def _validate_and_sort(self, segments: list[SequenceSegment]) -> list[SequenceSegment]:
         """Validate segments and sort by chain then position"""
         if not segments:
             return []
@@ -118,7 +120,8 @@ class SequenceRange:
         # Check chain consistency
         chains = {seg.chain for seg in segments}
         if None in chains and len(chains) > 1:
-            raise ValueError("Cannot mix single-chain (None) and multi-chain segments")
+            msg = "Cannot mix single-chain (None) and multi-chain segments"
+            raise ValueError(msg)
 
         # Sort by chain then start position
         return sorted(segments, key=lambda seg: (seg.chain or "", seg.start))
@@ -143,7 +146,8 @@ class SequenceRange:
             ValueError: If range string is invalid
         """
         if not range_str or not range_str.strip():
-            raise ValueError("Empty range string")
+            msg = "Empty range string"
+            raise ValueError(msg)
 
         range_str = range_str.strip()
         segments = []
@@ -158,7 +162,8 @@ class SequenceRange:
             if ":" in segment_str:
                 chain_match = re.match(r"^([A-Za-z0-9_]+):(.+)$", segment_str)
                 if not chain_match:
-                    raise ValueError(f"Invalid chain format: {segment_str}")
+                    msg = f"Invalid chain format: {segment_str}"
+                    raise ValueError(msg)
 
                 chain = chain_match.group(1)
                 range_part = chain_match.group(2)
@@ -167,46 +172,53 @@ class SequenceRange:
                 if "-" in range_part:
                     parts = range_part.split("-", 1)  # Only split on first dash
                     if len(parts) != 2:
-                        raise ValueError(f"Invalid range segment: {segment_str}")
+                        msg = f"Invalid range segment: {segment_str}"
+                        raise ValueError(msg)
                     try:
                         start, end = int(parts[0]), int(parts[1])
                         segments.append(SequenceSegment(start, end, chain))
                     except ValueError as e:
-                        raise ValueError(f"Invalid range numbers in {segment_str}: {e}")
+                        msg = f"Invalid range numbers in {segment_str}: {e}"
+                        raise ValueError(msg)
                 else:
                     # Single position: "A:5"
                     try:
                         pos = int(range_part)
                         segments.append(SequenceSegment(pos, pos, chain))
                     except ValueError as e:
-                        raise ValueError(f"Invalid position in {segment_str}: {e}")
+                        msg = f"Invalid position in {segment_str}: {e}"
+                        raise ValueError(msg)
 
             # Try single-chain format: "1-10" or "5"
             else:
                 if "-" in segment_str:
                     parts = segment_str.split("-", 1)  # Only split on first dash
                     if len(parts) != 2:
-                        raise ValueError(f"Invalid range segment: {segment_str}")
+                        msg = f"Invalid range segment: {segment_str}"
+                        raise ValueError(msg)
                     try:
                         start, end = int(parts[0]), int(parts[1])
                         segments.append(SequenceSegment(start, end, None))
                     except ValueError as e:
-                        raise ValueError(f"Invalid range numbers in {segment_str}: {e}")
+                        msg = f"Invalid range numbers in {segment_str}: {e}"
+                        raise ValueError(msg)
                 else:
                     # Single position: "5"
                     try:
                         pos = int(segment_str)
                         segments.append(SequenceSegment(pos, pos, None))
                     except ValueError as e:
-                        raise ValueError(f"Invalid position in {segment_str}: {e}")
+                        msg = f"Invalid position in {segment_str}: {e}"
+                        raise ValueError(msg)
 
         if not segments:
-            raise ValueError(f"No valid segments found in range string: {range_str}")
+            msg = f"No valid segments found in range string: {range_str}"
+            raise ValueError(msg)
 
         return cls(segments)
 
     @classmethod
-    def from_positions(cls, positions: List[int], chain: Optional[str] = None) -> "SequenceRange":
+    def from_positions(cls, positions: list[int], chain: Optional[str] = None) -> "SequenceRange":
         """
         Create SequenceRange from list of positions.
 
@@ -218,7 +230,8 @@ class SequenceRange:
             SequenceRange with segments for continuous runs
         """
         if not positions:
-            raise ValueError("Empty positions list")
+            msg = "Empty positions list"
+            raise ValueError(msg)
 
         # Sort and deduplicate
         unique_positions = sorted(set(positions))
@@ -241,7 +254,7 @@ class SequenceRange:
 
         return cls(segments)
 
-    def to_positions(self) -> List[Tuple[int, Optional[str]]]:
+    def to_positions(self) -> list[tuple[int, Optional[str]]]:
         """
         Expand range to individual positions.
 
@@ -254,7 +267,7 @@ class SequenceRange:
                 positions.append((pos, segment.chain))
         return positions
 
-    def to_positions_simple(self) -> List[int]:
+    def to_positions_simple(self) -> list[int]:
         """
         Expand to positions only (for single-chain ranges).
 
@@ -265,7 +278,8 @@ class SequenceRange:
             ValueError: If this is a multi-chain range
         """
         if self.is_multi_chain:
-            raise ValueError("Cannot convert multi-chain range to simple positions")
+            msg = "Cannot convert multi-chain range to simple positions"
+            raise ValueError(msg)
 
         positions = []
         for segment in self.segments:
@@ -284,7 +298,7 @@ class SequenceRange:
         return len(self.segments) > 1
 
     @property
-    def chains(self) -> Set[Optional[str]]:
+    def chains(self) -> set[Optional[str]]:
         """Get all chains involved in this range"""
         return {seg.chain for seg in self.segments}
 
@@ -294,7 +308,7 @@ class SequenceRange:
         return sum(seg.length for seg in self.segments)
 
     @property
-    def span(self) -> Tuple[int, int]:
+    def span(self) -> tuple[int, int]:
         """Overall start and end positions (ignoring gaps)"""
         return (self.segments[0].start, self.segments[-1].end)
 
@@ -349,13 +363,14 @@ class SequenceRange:
             New SequenceRange with gaps merged
         """
         if gap_tolerance < 0:
-            raise ValueError("Gap tolerance must be non-negative")
+            msg = "Gap tolerance must be non-negative"
+            raise ValueError(msg)
 
         if len(self.segments) <= 1:
             return SequenceRange(self.segments[:])  # Return copy
 
         # Group segments by chain
-        chain_segments: dict[Optional[str], List[SequenceSegment]] = {}
+        chain_segments: dict[Optional[str], list[SequenceSegment]] = {}
         for segment in self.segments:
             chain = segment.chain
             if chain not in chain_segments:
@@ -391,7 +406,7 @@ class SequenceRange:
         return SequenceRange(merged_segments)
 
     def map_to_structured(
-        self, structured_positions: List[int], chain: Optional[str] = None
+        self, structured_positions: list[int], chain: Optional[str] = None
     ) -> "SequenceRange":
         """
         Map range to structured residues only.
@@ -404,7 +419,8 @@ class SequenceRange:
             New SequenceRange containing only structured positions
         """
         if self.is_multi_chain and chain is None:
-            raise ValueError("Must specify chain for multi-chain range mapping")
+            msg = "Must specify chain for multi-chain range mapping"
+            raise ValueError(msg)
 
         structured_set = set(structured_positions)
         mapped_positions = []
@@ -419,7 +435,8 @@ class SequenceRange:
                 mapped_positions.append(pos)
 
         if not mapped_positions:
-            raise ValueError("No structured positions found in range")
+            msg = "No structured positions found in range"
+            raise ValueError(msg)
 
         return SequenceRange.from_positions(mapped_positions, chain)
 
@@ -456,13 +473,13 @@ class SequenceRange:
             if not isinstance(pos, int):
                 return False
             return any(seg.contains(pos, chain) for seg in self.segments)  # type: ignore
-        elif isinstance(item, int):
+        if isinstance(item, int):
             # For single-chain ranges only
             if self.is_multi_chain:
-                raise ValueError("Use (position, chain) tuple for multi-chain ranges")
+                msg = "Use (position, chain) tuple for multi-chain ranges"
+                raise ValueError(msg)
             return any(seg.contains(item) for seg in self.segments)
-        else:
-            return False
+        return False
 
 
 # Convenience functions for backward compatibility and ease of use
@@ -473,7 +490,7 @@ def parse_range(range_str: str) -> SequenceRange:
     return SequenceRange.parse(range_str)
 
 
-def positions_to_range(positions: List[int], chain: Optional[str] = None) -> SequenceRange:
+def positions_to_range(positions: list[int], chain: Optional[str] = None) -> SequenceRange:
     """Convenience function for creating ranges from positions"""
     return SequenceRange.from_positions(positions, chain)
 

@@ -1,7 +1,7 @@
 # pyECOD Mini - Clean Domain Partitioning Tool
 
 **Version**: 2.0.0
-**Status**: 🚧 In Development - Algorithm Extraction Phase
+**Status**: ✅ Production Ready - Integrated with pyecod_prod Framework
 
 A minimal, validated domain partitioning tool for ECOD protein classification with production-ready scaling.
 
@@ -11,29 +11,59 @@ pyECOD Mini is a clean extraction of the proven domain partitioning algorithm fr
 
 - ✅ **Validated Algorithm**: 6/6 regression tests passing, ~80% domain boundary accuracy
 - ✅ **Modern Python**: Type hints, dataclasses, mypy compliance
-- ✅ **Production Ready**: SLURM integration for processing 40k+ proteins
+- ✅ **Production Ready**: Integrated with pyecod_prod for large-scale processing
 - ✅ **Clean Architecture**: Simple, maintainable, well-documented
+- ✅ **External Workflow Support**: CLI arguments for integration with batch processing systems
 
 ## Quick Start
 
-**Note**: This repository is currently under development. The algorithm is being extracted from `/home/rschaeff/dev/pyecod/mini`.
+### Installation
+
+```bash
+# Clone repository
+git clone git@github.com:rschaeff/pyecod_mini.git
+cd pyecod_mini
+
+# Install in development mode
+pip install -e . --user
+
+# Verify installation
+pyecod-mini --validate
+```
+
+### Basic Usage
+
+**Partition a single protein from a batch:**
+```bash
+pyecod-mini 8ovp_A --batch-id ecod_weekly_20250905 --verbose
+```
+
+**Use custom input/output paths (for integration with external workflows):**
+```bash
+pyecod-mini 8s72_N \
+    --summary-xml /path/to/domains/8s72_N.develop291.domain_summary.xml \
+    --output /path/to/partitions/8s72_N.domains.xml \
+    --verbose
+```
+
+**Generate PyMOL visualization:**
+```bash
+pyecod-mini 8ovp_A --batch-id ecod_weekly_20250905 --visualize
+pymol /data/ecod/pdb_updates/batches/ecod_weekly_20250905/comparison_8ovp_A.pml
+```
 
 ### Current Status
 
-We are in the **extraction and setup phase**. See planning documents:
+✅ **Production Ready** - Fully integrated with pyecod_prod framework
 
-- 📋 [EXTRACTION_PLAN.md](EXTRACTION_PLAN.md) - Complete extraction roadmap
-- ✅ [ALGORITHM_VALIDATION.md](ALGORITHM_VALIDATION.md) - Validation strategy
-- 🏭 [PRODUCTION_DESIGN.md](PRODUCTION_DESIGN.md) - Production framework design
-
-### What Works (in source repo)
-
-The mini algorithm in `/home/rschaeff/dev/pyecod/mini` currently:
+The algorithm currently:
 - ✅ Partitions domains with ~80% accuracy
 - ✅ Passes 6 regression tests
 - ✅ Handles discontinuous domains
 - ✅ Optimizes domain boundaries
 - ✅ Produces ECOD-compliant XML output
+- ✅ Integrates with batch processing workflows
+- ✅ Processes 15-chain test batch successfully (100%)
 
 ## Goals
 
@@ -86,11 +116,58 @@ Build scalable production processing:
 - **Discontinuous Domains**: Support multi-segment domains
 - **Provenance Tracking**: Complete audit trail of decisions
 
+### CLI Arguments
+
+**Batch Mode (Default):**
+```bash
+pyecod-mini PROTEIN_ID [--batch-id BATCH_ID] [--verbose] [--visualize]
+```
+
+- `PROTEIN_ID`: Protein to partition (e.g., `8ovp_A`, `8s72_N`)
+- `--batch-id`: Optional batch ID for batch detection
+- `--verbose`: Show detailed processing information
+- `--visualize`: Generate PyMOL comparison script
+
+**Integration Mode (Custom Paths):**
+```bash
+pyecod-mini PROTEIN_ID \
+    --summary-xml PATH_TO_DOMAIN_SUMMARY_XML \
+    --output PATH_TO_OUTPUT_XML \
+    [--verbose]
+```
+
+- `--summary-xml`: Path to input domain summary XML (overrides batch detection)
+- `--output`: Path to output partition XML (overrides batch detection)
+
+This mode enables integration with external batch processing workflows like `pyecod_prod`.
+
+### Integration with pyecod_prod
+
+pyecod-mini is designed to integrate seamlessly with the `pyecod_prod` batch processing framework:
+
+1. **pyecod_prod** runs BLAST and HHsearch, generates domain summaries
+2. **pyecod_prod** calls `pyecod-mini` with `--summary-xml` and `--output` for each chain
+3. **pyecod-mini** partitions domains and writes output XML with provenance metadata
+4. **pyecod_prod** tracks completion in batch manifest
+
+**Example Integration Call:**
+```python
+from pyecod_prod.partition.partition_runner import PartitionRunner
+
+runner = PartitionRunner(pyecod_mini_path="/home/user/.local/bin/pyecod-mini")
+runner.partition_protein(
+    pdb_id="8s72",
+    chain_id="N",
+    summary_xml="/data/ecod/batches/ecod_weekly_20250905/domains/8s72_N.develop291.domain_summary.xml",
+    output_path="/data/ecod/batches/ecod_weekly_20250905/partitions/8s72_N.domains.xml"
+)
+```
+
 ### Production Processing
 
 - **Batch Scanning**: Identify proteins to process
-- **SLURM Jobs**: Parallel cluster processing
-- **Progress Monitoring**: Real-time dashboard
+- **External Workflow Integration**: Custom file paths via CLI
+- **Progress Monitoring**: Real-time dashboard in pyecod_prod
 - **Quality Control**: Automatic quality assessment
 - **Database Import**: Safe import with collision detection
 
@@ -119,15 +196,18 @@ See [EXTRACTION_PLAN.md](EXTRACTION_PLAN.md) for detailed structure.
 - PostgreSQL (for production database)
 - SLURM cluster (for production processing)
 
-### Setup (Coming Soon)
+### Setup
 
 ```bash
 # Clone repository
-git clone <repo-url>
+git clone git@github.com:rschaeff/pyecod_mini.git
 cd pyecod_mini
 
 # Install in development mode
-pip install -e ".[dev]"
+pip install -e . --user
+
+# Validate installation
+pyecod-mini --validate
 
 # Run tests
 pytest tests/
@@ -197,27 +277,28 @@ From the original pyECOD failure:
 
 ## Roadmap
 
-### Phase 1: Extraction & Validation (Weeks 1-2)
+### Phase 1: Extraction & Validation ✅ COMPLETED
 - [x] Create repository structure
 - [x] Design extraction plan
 - [x] Design validation plan
 - [x] Design production framework
-- [ ] Extract core algorithm with type hints
-- [ ] Migrate test suite
-- [ ] Run regression tests
-- [ ] Performance benchmarks
+- [x] Extract core algorithm with type hints
+- [x] Migrate test suite
+- [x] Run regression tests (6/6 passing)
+- [x] Performance benchmarks
 
-### Phase 2: Production Framework (Weeks 3-4)
-- [ ] Implement Scanner component
-- [ ] Implement SLURM Manager
-- [ ] Implement Monitoring dashboard
-- [ ] Implement Database Importer
-- [ ] Integration testing
+### Phase 2: Production Framework ✅ COMPLETED
+- [x] Integration with pyecod_prod
+- [x] CLI arguments for external workflows
+- [x] Custom path support (--summary-xml, --output)
+- [x] Batch processing integration
+- [x] End-to-end validation (15/15 chains, 100% success)
 
-### Phase 3: Production Deployment (Week 5)
+### Phase 3: Production Deployment 🚧 IN PROGRESS
+- [x] Process 15-chain test batch (100% success)
 - [ ] Process 100-protein test batch
 - [ ] Process 1000-protein staging batch
-- [ ] Full production run (40k proteins)
+- [ ] Full production run (40k+ proteins)
 - [ ] Quality assessment
 - [ ] Database import
 - [ ] Documentation finalization
@@ -247,6 +328,9 @@ Based on the original pyECOD Mini implementation, redesigned and refactored for 
 
 ---
 
-**Current Status**: 📋 Planning Complete - Ready for Algorithm Extraction
+**Current Status**: ✅ Production Ready - Integrated with pyecod_prod
 
-See [EXTRACTION_PLAN.md](EXTRACTION_PLAN.md) for next steps.
+- Algorithm: 6/6 regression tests passing
+- Integration: End-to-end validation complete (15/15 chains, 100%)
+- CLI: Enhanced with --summary-xml and --output arguments
+- Next: Scale to full production batch (40k+ proteins)

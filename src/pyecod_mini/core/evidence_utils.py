@@ -9,16 +9,19 @@ and provenance field population across all evidence types.
 ENHANCED: Adds comprehensive reference coverage calculation and quality assessment
 """
 
-from typing import Optional, Dict, Tuple, Any, List
-from .models import Evidence, AlignmentData
+from typing import Any, Optional
+
+from .models import AlignmentData, Evidence
 from .sequence_range import SequenceRange
 
 
-def calculate_evidence_confidence(evalue: Optional[float] = None,
-                                 probability: Optional[float] = None,
-                                 evidence_type: str = "unknown",
-                                 alignment_coverage: Optional[float] = None,
-                                 reference_coverage: Optional[float] = None) -> float:
+def calculate_evidence_confidence(
+    evalue: Optional[float] = None,
+    probability: Optional[float] = None,
+    evidence_type: str = "unknown",
+    alignment_coverage: Optional[float] = None,
+    reference_coverage: Optional[float] = None,
+) -> float:
     """
     Standardized confidence calculation for all evidence types.
 
@@ -65,10 +68,10 @@ def calculate_evidence_confidence(evalue: Optional[float] = None,
 
     # Type-specific adjustments
     type_multipliers = {
-        'domain_blast': 1.0,      # Domain BLAST is most reliable
-        'hhsearch': 0.95,         # HHsearch is very good for remote homology
-        'chain_blast': 0.9,       # Chain BLAST needs decomposition
-        'chain_blast_decomposed': 0.85  # Decomposed chain BLAST has additional uncertainty
+        "domain_blast": 1.0,  # Domain BLAST is most reliable
+        "hhsearch": 0.95,  # HHsearch is very good for remote homology
+        "chain_blast": 0.9,  # Chain BLAST needs decomposition
+        "chain_blast_decomposed": 0.85,  # Decomposed chain BLAST has additional uncertainty
     }
 
     type_multiplier = type_multipliers.get(evidence_type, 0.8)
@@ -113,12 +116,14 @@ def calculate_reference_coverage(evidence: Evidence) -> Optional[float]:
     return hit_length / evidence.reference_length
 
 
-def populate_evidence_provenance(evidence: Evidence,
-                                hit_range: Optional[SequenceRange] = None,
-                                alignment: Optional[AlignmentData] = None,
-                                reference_length: Optional[int] = None,
-                                domain_id: Optional[str] = None,
-                                classification: Optional[Dict[str, str]] = None) -> Evidence:
+def populate_evidence_provenance(
+    evidence: Evidence,
+    hit_range: Optional[SequenceRange] = None,
+    alignment: Optional[AlignmentData] = None,
+    reference_length: Optional[int] = None,
+    domain_id: Optional[str] = None,
+    classification: Optional[dict[str, str]] = None,
+) -> Evidence:
     """
     Populate provenance fields consistently for any evidence type.
 
@@ -165,9 +170,11 @@ def populate_evidence_provenance(evidence: Evidence,
             evidence.alignment_coverage = reference_coverage
 
     # Calculate query coverage if we have hit range but not reference coverage
-    elif (evidence.hit_range is not None and
-          evidence.reference_length is not None and
-          evidence.reference_length > 0):
+    elif (
+        evidence.hit_range is not None
+        and evidence.reference_length is not None
+        and evidence.reference_length > 0
+    ):
 
         # Fallback query-based coverage calculation
         hit_coverage = evidence.hit_range.total_length / evidence.reference_length
@@ -175,8 +182,8 @@ def populate_evidence_provenance(evidence: Evidence,
 
     # Set classification fields
     if classification:
-        evidence.t_group = classification.get('t_group')
-        evidence.h_group = classification.get('h_group')
+        evidence.t_group = classification.get("t_group")
+        evidence.h_group = classification.get("h_group")
 
     # Extract chain ID if not already set
     if not evidence.source_chain_id:
@@ -187,7 +194,7 @@ def populate_evidence_provenance(evidence: Evidence,
         evalue=evidence.evalue,
         evidence_type=evidence.type,
         alignment_coverage=evidence.alignment_coverage,
-        reference_coverage=reference_coverage
+        reference_coverage=reference_coverage,
     )
 
     return evidence
@@ -212,23 +219,23 @@ def extract_chain_id_from_evidence(evidence: Evidence) -> Optional[str]:
         # Handle formats like "e6dgvA1" -> "A" or "6dgv_A" -> "A"
         domain_id = evidence.domain_id
 
-        if '_' in domain_id:
+        if "_" in domain_id:
             # Format: "6dgv_A" or "pdb_chain"
-            parts = domain_id.split('_')
+            parts = domain_id.split("_")
             if len(parts) >= 2:
                 return parts[-1]  # Last part is typically chain
 
-        elif len(domain_id) > 5 and domain_id.startswith('e'):
+        elif len(domain_id) > 5 and domain_id.startswith("e"):
             # Format: "e6dgvA1" -> extract chain from position 5
             potential_chain = domain_id[5]
             if potential_chain.isalpha():
                 return potential_chain
 
     # Method 3: Default fallback
-    return 'A'
+    return "A"
 
 
-def assess_evidence_quality(evidence: Evidence) -> Dict[str, Any]:
+def assess_evidence_quality(evidence: Evidence) -> dict[str, Any]:
     """
     Comprehensive quality assessment for evidence.
 
@@ -241,80 +248,84 @@ def assess_evidence_quality(evidence: Evidence) -> Dict[str, Any]:
         Dictionary with quality assessment results
     """
     assessment = {
-        'overall_quality': 'unknown',
-        'quality_score': 0.0,
-        'issues': [],
-        'strengths': [],
-        'recommendations': []
+        "overall_quality": "unknown",
+        "quality_score": 0.0,
+        "issues": [],
+        "strengths": [],
+        "recommendations": [],
     }
 
     # Assess confidence
     if evidence.confidence >= 0.8:
-        assessment['strengths'].append('high_confidence')
-        assessment['quality_score'] += 3
+        assessment["strengths"].append("high_confidence")
+        assessment["quality_score"] += 3
     elif evidence.confidence >= 0.6:
-        assessment['quality_score'] += 2
+        assessment["quality_score"] += 2
     elif evidence.confidence < 0.5:
-        assessment['issues'].append('low_confidence')
-        assessment['quality_score'] -= 2
+        assessment["issues"].append("low_confidence")
+        assessment["quality_score"] -= 2
 
     # Assess reference coverage
     ref_coverage = calculate_reference_coverage(evidence)
     if ref_coverage is not None:
         if ref_coverage >= 0.8:
-            assessment['strengths'].append('excellent_reference_coverage')
-            assessment['quality_score'] += 3
+            assessment["strengths"].append("excellent_reference_coverage")
+            assessment["quality_score"] += 3
         elif ref_coverage >= 0.6:
-            assessment['strengths'].append('good_reference_coverage')
-            assessment['quality_score'] += 2
+            assessment["strengths"].append("good_reference_coverage")
+            assessment["quality_score"] += 2
         elif ref_coverage >= 0.4:
-            assessment['quality_score'] += 1
+            assessment["quality_score"] += 1
         else:
-            assessment['issues'].append('poor_reference_coverage')
-            assessment['quality_score'] -= 3
-            assessment['recommendations'].append('Consider requiring higher reference coverage')
+            assessment["issues"].append("poor_reference_coverage")
+            assessment["quality_score"] -= 3
+            assessment["recommendations"].append("Consider requiring higher reference coverage")
     else:
-        assessment['issues'].append('missing_reference_coverage')
-        assessment['quality_score'] -= 1
+        assessment["issues"].append("missing_reference_coverage")
+        assessment["quality_score"] -= 1
 
     # Assess E-value (for BLAST evidence)
     if evidence.evalue is not None:
         if evidence.evalue < 1e-10:
-            assessment['strengths'].append('excellent_evalue')
-            assessment['quality_score'] += 2
+            assessment["strengths"].append("excellent_evalue")
+            assessment["quality_score"] += 2
         elif evidence.evalue < 1e-5:
-            assessment['strengths'].append('good_evalue')
-            assessment['quality_score'] += 1
+            assessment["strengths"].append("good_evalue")
+            assessment["quality_score"] += 1
         elif evidence.evalue > 1.0:
-            assessment['issues'].append('poor_evalue')
-            assessment['quality_score'] -= 2
+            assessment["issues"].append("poor_evalue")
+            assessment["quality_score"] -= 2
 
     # Type-specific assessments
-    if evidence.type == 'hhsearch':
+    if evidence.type == "hhsearch":
         # Calculate original probability
         original_prob = evidence.confidence / 0.95 * 100  # Reverse type multiplier
         if original_prob < 50:
-            assessment['issues'].append('low_hhsearch_probability')
-            assessment['recommendations'].append('Consider minimum 68% HHsearch probability threshold')
+            assessment["issues"].append("low_hhsearch_probability")
+            assessment["recommendations"].append(
+                "Consider minimum 68% HHsearch probability threshold"
+            )
         elif original_prob >= 80:
-            assessment['strengths'].append('high_hhsearch_probability')
+            assessment["strengths"].append("high_hhsearch_probability")
 
     # Overall quality determination
-    if assessment['quality_score'] >= 5:
-        assessment['overall_quality'] = 'excellent'
-    elif assessment['quality_score'] >= 3:
-        assessment['overall_quality'] = 'good'
-    elif assessment['quality_score'] >= 1:
-        assessment['overall_quality'] = 'acceptable'
-    elif assessment['quality_score'] >= -1:
-        assessment['overall_quality'] = 'questionable'
+    if assessment["quality_score"] >= 5:
+        assessment["overall_quality"] = "excellent"
+    elif assessment["quality_score"] >= 3:
+        assessment["overall_quality"] = "good"
+    elif assessment["quality_score"] >= 1:
+        assessment["overall_quality"] = "acceptable"
+    elif assessment["quality_score"] >= -1:
+        assessment["overall_quality"] = "questionable"
     else:
-        assessment['overall_quality'] = 'poor'
+        assessment["overall_quality"] = "poor"
 
     return assessment
 
 
-def validate_evidence_provenance(evidence: Evidence, strict_mode: bool = True) -> Tuple[bool, List[str]]:
+def validate_evidence_provenance(
+    evidence: Evidence, strict_mode: bool = True
+) -> tuple[bool, list[str]]:
     """
     Validate that evidence has complete provenance information.
 
@@ -377,8 +388,9 @@ def validate_evidence_provenance(evidence: Evidence, strict_mode: bool = True) -
                 issues.append("HHsearch evidence missing reference coverage data")
 
     # Coverage validation (basic range checks)
-    if (evidence.alignment_coverage is not None and
-        (evidence.alignment_coverage < 0 or evidence.alignment_coverage > 1)):
+    if evidence.alignment_coverage is not None and (
+        evidence.alignment_coverage < 0 or evidence.alignment_coverage > 1
+    ):
         issues.append(f"Invalid alignment_coverage: {evidence.alignment_coverage}")
 
     # Reference coverage validation (basic range checks)
@@ -389,7 +401,7 @@ def validate_evidence_provenance(evidence: Evidence, strict_mode: bool = True) -
     return len(issues) == 0, issues
 
 
-def create_evidence_summary_dict(evidence: Evidence) -> Dict[str, Any]:
+def create_evidence_summary_dict(evidence: Evidence) -> dict[str, Any]:
     """
     Create a summary dictionary of evidence with all provenance information.
 
@@ -409,44 +421,41 @@ def create_evidence_summary_dict(evidence: Evidence) -> Dict[str, Any]:
 
     return {
         # Core fields
-        'type': evidence.type,
-        'source_pdb': evidence.source_pdb,
-        'query_range': str(evidence.query_range),
-        'confidence': evidence.confidence,
-        'evalue': evidence.evalue,
-
+        "type": evidence.type,
+        "source_pdb": evidence.source_pdb,
+        "query_range": str(evidence.query_range),
+        "confidence": evidence.confidence,
+        "evalue": evidence.evalue,
         # Provenance fields
-        'source_chain_id': evidence.source_chain_id,
-        'domain_id': evidence.domain_id,
-        'hit_range': str(evidence.hit_range) if evidence.hit_range else None,
-        'hsp_count': evidence.hsp_count,
-        'discontinuous': evidence.discontinuous,
-        'reference_length': evidence.reference_length,
-        'alignment_coverage': evidence.alignment_coverage,
-
+        "source_chain_id": evidence.source_chain_id,
+        "domain_id": evidence.domain_id,
+        "hit_range": str(evidence.hit_range) if evidence.hit_range else None,
+        "hsp_count": evidence.hsp_count,
+        "discontinuous": evidence.discontinuous,
+        "reference_length": evidence.reference_length,
+        "alignment_coverage": evidence.alignment_coverage,
         # ENHANCED: Reference coverage
-        'reference_coverage': ref_coverage,
-        'reference_coverage_percent': f"{ref_coverage:.1%}" if ref_coverage else None,
-
+        "reference_coverage": ref_coverage,
+        "reference_coverage_percent": f"{ref_coverage:.1%}" if ref_coverage else None,
         # Classification
-        't_group': evidence.t_group,
-        'h_group': evidence.h_group,
-
+        "t_group": evidence.t_group,
+        "h_group": evidence.h_group,
         # ENHANCED: Quality assessment
-        'quality_assessment': quality['overall_quality'],
-        'quality_score': quality['quality_score'],
-        'quality_issues': quality['issues'],
-        'quality_strengths': quality['strengths'],
-
+        "quality_assessment": quality["overall_quality"],
+        "quality_score": quality["quality_score"],
+        "quality_issues": quality["issues"],
+        "quality_strengths": quality["strengths"],
         # Validation
-        'is_valid': validate_evidence_provenance(evidence)[0]
+        "is_valid": validate_evidence_provenance(evidence)[0],
     }
 
 
-def standardize_evidence_list(evidence_list: list,
-                             reference_lengths: Dict[str, int] = None,
-                             protein_lengths: Dict[Tuple[str, str], int] = None,
-                             domain_definitions: Dict = None) -> list:
+def standardize_evidence_list(
+    evidence_list: list,
+    reference_lengths: dict[str, int] = None,
+    protein_lengths: dict[tuple[str, str], int] = None,
+    domain_definitions: dict = None,
+) -> list:
     """
     Apply standardized provenance population to a list of evidence.
 
@@ -470,8 +479,8 @@ def standardize_evidence_list(evidence_list: list,
             for ref in domain_refs:
                 if ref.domain_id and ref.t_group:
                     domain_id_to_classification[ref.domain_id] = {
-                        't_group': ref.t_group,
-                        'h_group': ref.h_group
+                        "t_group": ref.t_group,
+                        "h_group": ref.h_group,
                     }
 
     for evidence in evidence_list:
@@ -496,7 +505,7 @@ def standardize_evidence_list(evidence_list: list,
         evidence = populate_evidence_provenance(
             evidence=evidence,
             reference_length=evidence.reference_length,
-            classification=classification
+            classification=classification,
         )
 
         standardized.append(evidence)
@@ -505,10 +514,12 @@ def standardize_evidence_list(evidence_list: list,
 
 
 # ENHANCED: Quality-based filtering functions
-def filter_evidence_by_quality(evidence_list: List[Evidence],
-                               min_confidence: float = 0.5,
-                               min_reference_coverage: float = 0.5,
-                               require_reference_data: bool = True) -> Tuple[List[Evidence], Dict[str, int]]:
+def filter_evidence_by_quality(
+    evidence_list: list[Evidence],
+    min_confidence: float = 0.5,
+    min_reference_coverage: float = 0.5,
+    require_reference_data: bool = True,
+) -> tuple[list[Evidence], dict[str, int]]:
     """
     Filter evidence list by quality thresholds.
 
@@ -522,22 +533,22 @@ def filter_evidence_by_quality(evidence_list: List[Evidence],
         Tuple of (filtered_evidence, rejection_stats)
     """
     filtered = []
-    stats = {'confidence': 0, 'reference_coverage': 0, 'missing_data': 0}
+    stats = {"confidence": 0, "reference_coverage": 0, "missing_data": 0}
 
     for evidence in evidence_list:
         # Check confidence
         if evidence.confidence < min_confidence:
-            stats['confidence'] += 1
+            stats["confidence"] += 1
             continue
 
         # Check reference coverage
         ref_coverage = calculate_reference_coverage(evidence)
         if ref_coverage is not None:
             if ref_coverage < min_reference_coverage:
-                stats['reference_coverage'] += 1
+                stats["reference_coverage"] += 1
                 continue
         elif require_reference_data:
-            stats['missing_data'] += 1
+            stats["missing_data"] += 1
             continue
 
         filtered.append(evidence)
@@ -557,7 +568,7 @@ def is_high_coverage_evidence(evidence: Evidence, threshold: float = 0.6) -> boo
     return ref_coverage is not None and ref_coverage >= threshold
 
 
-def get_evidence_coverage_stats(evidence_list: list) -> Dict[str, Any]:
+def get_evidence_coverage_stats(evidence_list: list) -> dict[str, Any]:
     """
     Get coverage statistics for a list of evidence.
 
@@ -565,7 +576,7 @@ def get_evidence_coverage_stats(evidence_list: list) -> Dict[str, Any]:
     """
     total = len(evidence_list)
     if total == 0:
-        return {'total': 0}
+        return {"total": 0}
 
     with_provenance = sum(1 for e in evidence_list if validate_evidence_provenance(e)[0])
     high_confidence = sum(1 for e in evidence_list if is_high_confidence_evidence(e))
@@ -575,8 +586,11 @@ def get_evidence_coverage_stats(evidence_list: list) -> Dict[str, Any]:
     with_ref_coverage = sum(1 for e in evidence_list if calculate_reference_coverage(e) is not None)
     avg_ref_coverage = None
     if with_ref_coverage > 0:
-        coverages = [calculate_reference_coverage(e) for e in evidence_list
-                    if calculate_reference_coverage(e) is not None]
+        coverages = [
+            calculate_reference_coverage(e)
+            for e in evidence_list
+            if calculate_reference_coverage(e) is not None
+        ]
         avg_ref_coverage = sum(coverages) / len(coverages)
 
     by_type = {}
@@ -584,14 +598,14 @@ def get_evidence_coverage_stats(evidence_list: list) -> Dict[str, Any]:
         by_type[evidence.type] = by_type.get(evidence.type, 0) + 1
 
     return {
-        'total': total,
-        'with_complete_provenance': with_provenance,
-        'provenance_percentage': (with_provenance / total) * 100,
-        'high_confidence': high_confidence,
-        'high_confidence_percentage': (high_confidence / total) * 100,
-        'high_coverage': high_coverage,
-        'high_coverage_percentage': (high_coverage / total) * 100,
-        'with_reference_coverage': with_ref_coverage,
-        'average_reference_coverage': avg_ref_coverage,
-        'by_type': by_type
+        "total": total,
+        "with_complete_provenance": with_provenance,
+        "provenance_percentage": (with_provenance / total) * 100,
+        "high_confidence": high_confidence,
+        "high_confidence_percentage": (high_confidence / total) * 100,
+        "high_coverage": high_coverage,
+        "high_coverage_percentage": (high_coverage / total) * 100,
+        "with_reference_coverage": with_ref_coverage,
+        "average_reference_coverage": avg_ref_coverage,
+        "by_type": by_type,
     }
