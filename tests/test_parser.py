@@ -268,6 +268,95 @@ class TestEvidenceSummary:
         assert summary["unique_families"] == 3  # pdb1, pdb2, pdb3
 
 
+class TestHHsearchAPISpecFormat:
+    """Test HHsearch evidence parsing in API spec format"""
+
+    @pytest.mark.unit
+    def test_parse_hhsearch_api_spec_format(self, tmp_path):
+        """Test parsing HHsearch evidence in API spec format (type='hhsearch')"""
+        xml_content = """<?xml version="1.0"?>
+<domain_summary version="1.0">
+  <protein pdb_id="8axb" chain_id="A" length="430">
+    <sequence>SQITIQARLISFESNRQQLWKLMADLNTPLINELLCQLGQHPDFEKWQQKGKLPSTVVSQLCQPLKTDPRFAGQPSRLYMSAIHIVDYIYKSWLASSLPFPLVFETNEDMVWSKNQKGRLCVHFNGLSDLIFEVYCGNRQLHWFQRFLEDQQTKRKSKNQHSSGLFTLRNGHLVWLEGEGKGEPWNLHHLTLYCCVDNRLWTEEGTEIVRQEKADKQSTLTRINNSFERPSQPLYQGQSHILVGVSLGLEKPATVAVVDAIANKVLAYRSIKQLLGDNYELLNRQRRQQQYLSHERHKAQKNFSPNQFGASELGQHIDRLLAKAIVALARTYKAGSIVLPKLGDMREVVQSEIQAIAEQKFPGYIEGQQKYAKQYRVNVHRWSYGRLIQSIQSKAAQTGIVIEEGKQPIRGSPHDKAKELALSAYNLRLT</sequence>
+  </protein>
+  <evidence>
+    <hit type="hhsearch" target="e5b43A3" target_family="Ribonuclease H-like" probability="98.4" evalue="2.10e-10" score="109.4" query_range="239-417" target_range="16-161"/>
+  </evidence>
+</domain_summary>"""
+
+        xml_file = tmp_path / "test_hhsearch_api.xml"
+        xml_file.write_text(xml_content)
+
+        # Create mock reference data
+        reference_lengths = {"e5b43A3": 236, "5b43A3": 236}
+
+        # Parse with reference lengths
+        evidence = parse_domain_summary(
+            str(xml_file),
+            reference_lengths=reference_lengths,
+            require_reference_lengths=False,
+        )
+
+        # Verify we got HHsearch evidence
+        assert len(evidence) == 1
+        assert evidence[0].type == "hhsearch"
+        assert evidence[0].domain_id == "e5b43A3"
+        assert str(evidence[0].query_range) == "239-417"
+        assert evidence[0].evalue == 2.10e-10
+
+        # Verify target_range was parsed correctly
+        assert evidence[0].hit_range is not None
+        assert str(evidence[0].hit_range) == "16-161"
+
+        # Verify reference coverage calculation
+        assert evidence[0].reference_length == 236
+        assert evidence[0].reference_coverage is not None
+        # (161-16+1) / 236 = 146 / 236 ≈ 0.619
+        assert abs(evidence[0].reference_coverage - 0.619) < 0.01
+
+        # Verify high confidence (98.4% probability)
+        assert evidence[0].confidence > 0.7
+
+        print(f"✓ HHsearch evidence parsed successfully")
+        print(f"  Domain: {evidence[0].domain_id}")
+        print(f"  Query range: {evidence[0].query_range}")
+        print(f"  Target range: {evidence[0].hit_range}")
+        print(f"  Reference coverage: {evidence[0].reference_coverage:.1%}")
+        print(f"  Confidence: {evidence[0].confidence:.3f}")
+
+    @pytest.mark.unit
+    def test_hhsearch_without_target_range(self, tmp_path):
+        """Test HHsearch evidence without target_range (should still parse but validation may fail)"""
+        xml_content = """<?xml version="1.0"?>
+<domain_summary version="1.0">
+  <protein pdb_id="test" chain_id="A" length="200">
+    <sequence>AAAAA</sequence>
+  </protein>
+  <evidence>
+    <hit type="hhsearch" target="e1234A1" probability="95.0" evalue="1e-15" query_range="10-100"/>
+  </evidence>
+</domain_summary>"""
+
+        xml_file = tmp_path / "test_hhsearch_no_target.xml"
+        xml_file.write_text(xml_content)
+
+        reference_lengths = {"e1234A1": 150}
+
+        # Parse (should not crash)
+        evidence = parse_domain_summary(
+            str(xml_file),
+            reference_lengths=reference_lengths,
+            require_reference_lengths=False,
+        )
+
+        # Should parse but may not have hit_range
+        # In strict mode, this would be rejected
+        # In non-strict mode, it should be accepted
+        if evidence:
+            assert evidence[0].type == "hhsearch"
+            assert evidence[0].domain_id == "e1234A1"
+
+
 class TestIntegrationWithRealData:
     """Integration tests with real domain summary files"""
 

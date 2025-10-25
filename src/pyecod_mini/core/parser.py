@@ -286,10 +286,15 @@ def parse_domain_summary(
                 source_pdb, chain_id = extract_pdb_chain_robust(target, domain_lookup)
 
                 query_range_str = hit.get("query_range", "")
+                target_range_str = hit.get("target_range", "")
+
                 if not query_range_str:
                     continue
 
                 try:
+                    query_range = SequenceRange.parse(query_range_str)
+                    hit_range = SequenceRange.parse(target_range_str) if target_range_str else None
+
                     reference_length = None
                     if reference_lengths:
                         if target in reference_lengths:
@@ -308,13 +313,15 @@ def parse_domain_summary(
                     evidence = Evidence(
                         type="hhsearch",
                         source_pdb=source_pdb,
-                        query_range=SequenceRange.parse(query_range_str),
+                        query_range=query_range,
                         domain_id=target,
                         evalue=float(hit.get("evalue", "999")),
                     )
 
                     evidence = populate_evidence_provenance(
-                        evidence=evidence, reference_length=reference_length
+                        evidence=evidence,
+                        hit_range=hit_range,
+                        reference_length=reference_length
                     )
 
                     # Parse probability for confidence calculation
@@ -521,6 +528,8 @@ def parse_domain_summary(
             source_pdb = hit_id[1:5]
 
         query_reg = hit.find("query_reg")
+        hit_reg = hit.find("hit_reg")
+
         if query_reg is not None and query_reg.text:
             try:
                 prob = float(hit.get("probability", "0"))
@@ -548,6 +557,11 @@ def parse_domain_summary(
                     skipped_counts["no_reference_length"] += 1
                     continue
 
+                # Parse hit_reg to get hit_range
+                hit_range = None
+                if hit_reg is not None and hit_reg.text:
+                    hit_range = SequenceRange.parse(hit_reg.text)
+
                 evidence = Evidence(
                     type="hhsearch",
                     source_pdb=source_pdb,
@@ -557,7 +571,9 @@ def parse_domain_summary(
                 )
 
                 evidence = populate_evidence_provenance(
-                    evidence=evidence, reference_length=reference_length
+                    evidence=evidence,
+                    hit_range=hit_range,
+                    reference_length=reference_length
                 )
 
                 prob = float(hit.get("probability", "0"))
