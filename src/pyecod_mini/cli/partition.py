@@ -231,7 +231,32 @@ def partition_protein(
 
         if not domains:
             print("No domains found")
-            return None
+
+            # SCIENTIFIC RESULT: Evidence was filtered by quality thresholds
+            # This is legitimate - write a valid "0 domains" partition XML
+            parts = protein_id.split("_")
+            pdb_id, chain_id = parts[0], parts[1] if len(parts) > 1 else "A"
+
+            metadata = create_metadata_from_batch(
+                pdb_id, chain_id, str(paths["batch_dir"]), paths["batch_name"]
+            )
+            metadata.sequence_length = sequence_length
+            metadata.process_parameters.update(
+                {
+                    "evidence_items_processed": len(evidence),
+                    "blast_alignments_loaded": len(blast_alignments),
+                    "domain_definitions_available": len(domain_definitions),
+                    "reference_lengths_available": len(domain_lengths),
+                    "boundary_optimization_enabled": False,
+                    "domains_assigned": 0,
+                    "quality_filtering_rejected_all_evidence": True,
+                }
+            )
+
+            # Write valid partition XML with 0 domains
+            write_domain_partition([], metadata, str(paths["output"]))
+            print(f"✓ Output written to: {paths['output']}")
+            return []  # Success with empty domain list
 
         # Apply boundary optimization with provenance tracking
         if verbose:

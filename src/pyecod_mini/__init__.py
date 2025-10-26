@@ -10,7 +10,7 @@ Library API:
     Domain              - Domain result dataclass
 """
 
-__version__ = "2.0.1"
+__version__ = "2.0.2"
 __author__ = "pyECOD Mini Development Team"
 
 # Export library API
