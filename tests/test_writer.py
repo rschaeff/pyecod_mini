@@ -233,6 +233,138 @@ class TestDomainWriter:
         assert domain.get("family") == "family&with<special>chars"
 
 
+class TestOverlappingDomainCoverage:
+    """Test coverage calculation with overlapping domains (bug fix verification)"""
+
+    @pytest.mark.unit
+    def test_coverage_with_overlapping_domains(self, tmp_path):
+        """Coverage should not exceed 100% even with overlapping domains.
+
+        This test verifies the fix for the overlap bug where domains with
+        overlapping residue ranges caused reported coverage to exceed 100%.
+        """
+        # Create domains with overlap (like 9hpj_B case from bug report)
+        # d2: 1-255, d1: 236-341 = 20 residue overlap at 236-255
+        domains = [
+            Domain(
+                id="d2",
+                range=SequenceRange.parse("1-255"),
+                family="1.1.9",
+                evidence_count=1,
+                source="chain_blast",
+                evidence_items=[],
+            ),
+            Domain(
+                id="d1",
+                range=SequenceRange.parse("236-341"),
+                family="708.1.2",
+                evidence_count=1,
+                source="hhsearch",
+                evidence_items=[],
+            ),
+        ]
+
+        output_file = tmp_path / "overlap_test.xml"
+        metadata = create_test_metadata("9hpj", "B")
+        metadata.sequence_length = 341
+
+        write_domain_partition(domains, metadata, str(output_file))
+
+        # Parse and check coverage
+        tree = ET.parse(output_file)
+        stats = tree.find(".//statistics")
+
+        # Coverage should be exactly 1.0 (100%) since domains cover positions 1-341
+        # NOT 1.059 (105.9%) which was the buggy behavior
+        coverage = float(stats.get("total_coverage"))
+        residues_assigned = int(stats.get("residues_assigned"))
+
+        assert coverage <= 1.0, f"Coverage {coverage} exceeds 100%"
+        assert coverage == 1.0, f"Expected 100% coverage, got {coverage:.1%}"
+        assert residues_assigned == 341, f"Expected 341 residues, got {residues_assigned}"
+
+    @pytest.mark.unit
+    def test_coverage_with_discontinuous_overlap(self, tmp_path):
+        """Coverage with discontinuous domain that overlaps another.
+
+        Based on 9uko_F case: discontinuous domain inserts into another.
+        """
+        # d2: 1-173, d1: 9-25,174-340 (discontinuous, segment 9-25 overlaps d2)
+        domains = [
+            Domain(
+                id="d2",
+                range=SequenceRange.parse("1-173"),
+                family="142.1.1",
+                evidence_count=1,
+                source="domain_blast",
+                evidence_items=[],
+            ),
+            Domain(
+                id="d1",
+                range=SequenceRange.parse("9-25,174-340"),
+                family="142.1.1",
+                evidence_count=1,
+                source="chain_blast_decomposed",
+                evidence_items=[],
+            ),
+        ]
+
+        output_file = tmp_path / "discontinuous_overlap.xml"
+        metadata = create_test_metadata("9uko", "F")
+        metadata.sequence_length = 340
+
+        write_domain_partition(domains, metadata, str(output_file))
+
+        tree = ET.parse(output_file)
+        stats = tree.find(".//statistics")
+
+        coverage = float(stats.get("total_coverage"))
+        residues_assigned = int(stats.get("residues_assigned"))
+
+        # Should be exactly 340/340 = 1.0, NOT 357/340 = 1.05
+        assert coverage <= 1.0, f"Coverage {coverage} exceeds 100%"
+        assert residues_assigned == 340, f"Expected 340 residues, got {residues_assigned}"
+
+    @pytest.mark.unit
+    def test_coverage_non_overlapping_domains(self, tmp_path):
+        """Non-overlapping domains should calculate correctly."""
+        domains = [
+            Domain(
+                id="d1",
+                range=SequenceRange.parse("1-100"),
+                family="family1",
+                evidence_count=1,
+                source="domain_blast",
+                evidence_items=[],
+            ),
+            Domain(
+                id="d2",
+                range=SequenceRange.parse("101-200"),
+                family="family2",
+                evidence_count=1,
+                source="domain_blast",
+                evidence_items=[],
+            ),
+        ]
+
+        output_file = tmp_path / "non_overlap.xml"
+        metadata = create_test_metadata("test", "A")
+        metadata.sequence_length = 300
+
+        write_domain_partition(domains, metadata, str(output_file))
+
+        tree = ET.parse(output_file)
+        stats = tree.find(".//statistics")
+
+        coverage = float(stats.get("total_coverage"))
+        residues_assigned = int(stats.get("residues_assigned"))
+
+        # 200 residues covered out of 300 = 66.67%
+        expected_coverage = 200 / 300
+        assert abs(coverage - expected_coverage) < 0.001
+        assert residues_assigned == 200
+
+
 if __name__ == "__main__":
     # Allow running tests directly
     pytest.main([__file__, "-v"])

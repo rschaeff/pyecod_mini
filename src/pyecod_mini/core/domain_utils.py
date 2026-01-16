@@ -396,11 +396,20 @@ def standardize_domain_list(domains: list[Domain]) -> list[Domain]:
 
 # Convenience functions for common domain operations
 def get_domain_coverage_stats(domains: list[Domain], sequence_length: int) -> dict[str, Any]:
-    """Get coverage statistics for a list of domains"""
+    """Get coverage statistics for a list of domains.
+
+    Uses set union to calculate coverage, avoiding double-counting
+    when domains have overlapping residue positions.
+    """
     if not domains:
         return {"total_domains": 0, "total_coverage": 0, "coverage_percentage": 0.0}
 
-    total_coverage = sum(d.length for d in domains)
+    # Use set union to avoid double-counting overlapping residues
+    all_positions = set()
+    for domain in domains:
+        all_positions.update(domain.assigned_positions)
+    total_coverage = len(all_positions)
+
     optimized_count = sum(1 for d in domains if d.was_optimized())
 
     with_classification = sum(1 for d in domains if d.t_group)

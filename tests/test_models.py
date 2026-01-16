@@ -13,8 +13,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pyecod_mini.core.models import AlignmentData, Domain, Evidence
+from pyecod_mini.core.models import AlignmentData, Domain, DomainLayout, Evidence
 from pyecod_mini.core.sequence_range import SequenceRange
+from pyecod_mini.core.domain_utils import get_domain_coverage_stats
 
 
 class TestEvidenceModel:
@@ -309,6 +310,136 @@ class TestModelDefaults:
 
         assert len(domain2.evidence_items) == 1
         assert domain2.evidence_items[0] is evidence
+
+
+class TestOverlappingDomainCoverage:
+    """Test coverage calculations with overlapping domains (bug fix verification)
+
+    These tests verify the fix for the overlap bug where domains with
+    overlapping residue ranges caused reported coverage to exceed 100%.
+    """
+
+    @pytest.mark.unit
+    def test_domain_layout_coverage_with_overlapping_domains(self):
+        """DomainLayout.get_coverage_stats() should handle overlapping domains correctly."""
+        # Create domains with overlap (like 9hpj_B case)
+        # d2: 1-255, d1: 236-341 = 20 residue overlap at 236-255
+        d2 = Domain(
+            id="d2",
+            range=SequenceRange.parse("1-255"),
+            family="1.1.9",
+            evidence_count=1,
+            source="chain_blast",
+            evidence_items=[],
+        )
+        d1 = Domain(
+            id="d1",
+            range=SequenceRange.parse("236-341"),
+            family="708.1.2",
+            evidence_count=1,
+            source="hhsearch",
+            evidence_items=[],
+        )
+
+        layout = DomainLayout.from_domains([d1, d2], sequence_length=341)
+        stats = layout.get_coverage_stats()
+
+        # Coverage should be 100% (341/341), NOT 105.9% (361/341)
+        assert stats["coverage_percent"] <= 100.0, f"Coverage {stats['coverage_percent']}% exceeds 100%"
+        assert stats["coverage_percent"] == 100.0
+        assert stats["assigned_residues"] == 341
+
+    @pytest.mark.unit
+    def test_domain_layout_coverage_with_discontinuous_overlap(self):
+        """DomainLayout handles discontinuous domains that overlap another domain."""
+        # Based on 9uko_F case
+        d2 = Domain(
+            id="d2",
+            range=SequenceRange.parse("1-173"),
+            family="142.1.1",
+            evidence_count=1,
+            source="domain_blast",
+            evidence_items=[],
+        )
+        d1 = Domain(
+            id="d1",
+            range=SequenceRange.parse("9-25,174-340"),
+            family="142.1.1",
+            evidence_count=1,
+            source="chain_blast_decomposed",
+            evidence_items=[],
+        )
+
+        layout = DomainLayout.from_domains([d1, d2], sequence_length=340)
+        stats = layout.get_coverage_stats()
+
+        # Coverage should be 100% (340/340), NOT 105% (357/340)
+        assert stats["coverage_percent"] <= 100.0
+        assert stats["coverage_percent"] == 100.0
+        assert stats["assigned_residues"] == 340
+
+    @pytest.mark.unit
+    def test_get_domain_coverage_stats_with_overlap(self):
+        """get_domain_coverage_stats() should handle overlapping domains correctly."""
+        # Create overlapping domains
+        d1 = Domain(
+            id="d1",
+            range=SequenceRange.parse("1-100"),
+            family="family1",
+            evidence_count=1,
+            source="domain_blast",
+            evidence_items=[],
+        )
+        d2 = Domain(
+            id="d2",
+            range=SequenceRange.parse("80-150"),
+            family="family2",
+            evidence_count=1,
+            source="hhsearch",
+            evidence_items=[],
+        )
+
+        stats = get_domain_coverage_stats([d1, d2], sequence_length=200)
+
+        # Domains cover 1-100 and 80-150, union is 1-150 = 150 residues
+        # Coverage should be 150/200 = 75%, NOT (100+71)/200 = 85.5%
+        assert stats["total_coverage"] == 150, f"Expected 150 residues, got {stats['total_coverage']}"
+        assert stats["coverage_percentage"] == 75.0, f"Expected 75%, got {stats['coverage_percentage']}%"
+
+    @pytest.mark.unit
+    def test_get_domain_coverage_stats_non_overlapping(self):
+        """get_domain_coverage_stats() works correctly for non-overlapping domains."""
+        d1 = Domain(
+            id="d1",
+            range=SequenceRange.parse("1-100"),
+            family="family1",
+            evidence_count=1,
+            source="domain_blast",
+            evidence_items=[],
+        )
+        d2 = Domain(
+            id="d2",
+            range=SequenceRange.parse("101-200"),
+            family="family2",
+            evidence_count=1,
+            source="domain_blast",
+            evidence_items=[],
+        )
+
+        stats = get_domain_coverage_stats([d1, d2], sequence_length=300)
+
+        # 200 residues out of 300
+        assert stats["total_coverage"] == 200
+        assert abs(stats["coverage_percentage"] - 66.666666) < 0.01
+
+    @pytest.mark.unit
+    def test_get_domain_coverage_stats_empty(self):
+        """get_domain_coverage_stats() handles empty domain list."""
+        stats = get_domain_coverage_stats([], sequence_length=100)
+
+        assert stats["total_domains"] == 0
+        assert stats["total_coverage"] == 0
+        assert stats["coverage_percentage"] == 0.0
 
 
 if __name__ == "__main__":

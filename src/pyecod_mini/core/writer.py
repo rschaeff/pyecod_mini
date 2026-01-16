@@ -164,9 +164,13 @@ def write_domain_partition(
         stats_elem.set("sequence_length", str(metadata.sequence_length))
         stats_elem.set("domain_count", str(len(domains)))
 
-        # Calculate coverage statistics
+        # Calculate coverage statistics using set union to handle overlapping domains
         if domains:
-            total_assigned = sum(d.length for d in domains)
+            # Use set union to avoid double-counting overlapping residues
+            all_positions = set()
+            for domain in domains:
+                all_positions.update(domain.assigned_positions)
+            total_assigned = len(all_positions)
             coverage = total_assigned / metadata.sequence_length
             stats_elem.set("total_coverage", f"{coverage:.4f}")
             stats_elem.set("residues_assigned", str(total_assigned))
