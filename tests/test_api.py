@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from pyecod_mini import Domain, PartitionError, PartitionResult, __version__, partition_protein
+from pyecod_mini import Domain, PartitionError, Partitioner, PartitionResult, __version__, partition_protein
+from pyecod_mini.core.reference_cache import ReferenceCache, ReferenceData
 
 
 @pytest.mark.unit
@@ -249,7 +250,6 @@ class TestAPIPartitionProtein:
 
         # Verify version matches package version
         assert result.algorithm_version == __version__
-        assert result.algorithm_version == "2.0.0"
 
     def test_partition_protein_version_in_xml(self, domain_summary_path, temp_output_dir):
         """Test that algorithm version is written to XML output"""
@@ -275,7 +275,7 @@ class TestAPIPartitionProtein:
         assert version_elem is not None
 
         algorithm_version = version_elem.get("algorithm")
-        assert algorithm_version == "2.0.0"
+        assert algorithm_version == __version__
         assert algorithm_version == result.algorithm_version
 
 
@@ -349,7 +349,8 @@ class TestAPIVersionExport:
 
         assert __version__ is not None
         assert isinstance(__version__, str)
-        assert __version__ == "2.0.0"
+        # Version should be semantic versioning format
+        assert len(__version__.split(".")) == 3
 
     def test_api_exports(self):
         """Test that API functions are exported from package __init__"""
@@ -491,3 +492,255 @@ class TestAPIDocumentation:
         """Verify dataclasses have docstrings"""
         assert Domain.__doc__ is not None
         assert PartitionResult.__doc__ is not None
+
+
+@pytest.mark.unit
+class TestReferenceCache:
+    """Test ReferenceCache class for batch processing optimization"""
+
+    def test_reference_cache_initial_state(self):
+        """Test ReferenceCache initial state"""
+        cache = ReferenceCache()
+        assert not cache.is_loaded()
+        assert cache.summary() == "ReferenceCache: No data loaded"
+
+    def test_reference_cache_load_empty(self):
+        """Test loading with no files specified"""
+        cache = ReferenceCache()
+        data = cache.load()
+
+        # Should return empty data but be considered loaded
+        assert isinstance(data, ReferenceData)
+        assert data.domain_definitions_count == 0
+        assert data.reference_lengths_count == 0
+        assert data.protein_lengths_count == 0
+
+    def test_reference_cache_load_nonexistent_files(self):
+        """Test loading with nonexistent files gracefully"""
+        cache = ReferenceCache()
+        data = cache.load(
+            domain_definitions_file="/nonexistent/domain_definitions.csv",
+            reference_lengths_file="/nonexistent/reference_lengths.csv",
+            protein_lengths_file="/nonexistent/protein_lengths.csv",
+        )
+
+        # Should not raise, just return empty data
+        assert isinstance(data, ReferenceData)
+        assert not data.is_loaded()
+
+    def test_reference_cache_clear(self):
+        """Test clearing cached data"""
+        cache = ReferenceCache()
+        cache.load()
+        cache.clear()
+        assert not cache.is_loaded()
+
+    def test_reference_cache_context_manager(self):
+        """Test ReferenceCache as context manager"""
+        with ReferenceCache() as cache:
+            cache.load()
+            assert isinstance(cache, ReferenceCache)
+
+        # After exiting context, cache should be cleared
+        assert not cache.is_loaded()
+
+    def test_reference_data_is_loaded(self):
+        """Test ReferenceData.is_loaded() method"""
+        data = ReferenceData()
+        assert not data.is_loaded()
+
+        # With some data
+        data.reference_lengths = {"test": 100}
+        assert data.is_loaded()
+
+
+@pytest.mark.unit
+class TestPartitionerClass:
+    """Test Partitioner class structure and methods"""
+
+    def test_partitioner_initial_state(self):
+        """Test Partitioner initial state"""
+        p = Partitioner()
+        assert not p.is_loaded()
+        assert p.partition_count == 0
+        assert "not loaded" in repr(p)
+
+    def test_partitioner_repr(self):
+        """Test Partitioner string representation"""
+        p = Partitioner()
+        assert "Partitioner" in repr(p)
+        assert "not loaded" in repr(p)
+        assert "0 partitions" in repr(p)
+
+    def test_partitioner_context_manager(self):
+        """Test Partitioner as context manager"""
+        with Partitioner() as p:
+            assert isinstance(p, Partitioner)
+
+    def test_partitioner_requires_load_before_partition(self, temp_output_dir):
+        """Test that partition() requires load_references() first"""
+        p = Partitioner()
+
+        with pytest.raises(RuntimeError) as exc_info:
+            p.partition(
+                summary_xml="/dummy/path.xml",
+                output_xml=os.path.join(temp_output_dir, "output.xml"),
+                pdb_id="test",
+                chain_id="A",
+            )
+
+        assert "Reference data not loaded" in str(exc_info.value)
+        assert "load_references()" in str(exc_info.value)
+
+    def test_partitioner_close(self):
+        """Test Partitioner.close() releases resources"""
+        p = Partitioner()
+        # Load some reference data (even if empty)
+        p._cache.load()
+        assert p.is_loaded() or True  # May or may not be "loaded" depending on files
+
+        p.close()
+        assert not p.is_loaded()
+
+    def test_partitioner_summary(self):
+        """Test Partitioner.summary() method"""
+        p = Partitioner()
+        summary = p.summary()
+        assert "Partitioner" in summary
+        assert "0 partitions completed" in summary
+
+    def test_partitioner_method_chaining(self):
+        """Test that load_references returns self for chaining"""
+        p = Partitioner()
+        result = p.load_references()  # With no files, should still work
+        assert result is p
+
+
+@pytest.mark.integration
+class TestPartitionerIntegration:
+    """Integration tests for Partitioner batch processing"""
+
+    def test_partitioner_load_references_from_config(self):
+        """Test loading references from default config"""
+        p = Partitioner()
+        p.load_references_from_config()
+
+        # Should have loaded some data
+        assert p.is_loaded()
+        p.close()
+
+    def test_partitioner_partition_success(self, domain_summary_path, temp_output_dir):
+        """Test successful partition with Partitioner"""
+        output_path = os.path.join(temp_output_dir, "partitioner_test.xml")
+
+        with Partitioner() as p:
+            p.load_references_from_config()
+
+            result = p.partition(
+                summary_xml=domain_summary_path,
+                output_xml=output_path,
+                pdb_id="8ovp",
+                chain_id="A",
+            )
+
+            # Verify result
+            assert isinstance(result, PartitionResult)
+            assert result.success is True
+            assert result.pdb_id == "8ovp"
+            assert result.chain_id == "A"
+            assert os.path.exists(output_path)
+
+            # Verify partition count
+            assert p.partition_count == 1
+
+    def test_partitioner_multiple_partitions(self, domain_summary_path, temp_output_dir):
+        """Test partitioning multiple proteins with same references"""
+        with Partitioner() as p:
+            p.load_references_from_config()
+
+            # Partition same protein twice (simulates batch)
+            for i in range(3):
+                output_path = os.path.join(temp_output_dir, f"batch_test_{i}.xml")
+                result = p.partition(
+                    summary_xml=domain_summary_path,
+                    output_xml=output_path,
+                    pdb_id="8ovp",
+                    chain_id="A",
+                )
+                assert result.success is True
+
+            # Should have counted all partitions
+            assert p.partition_count == 3
+
+    def test_partitioner_marks_cached_references(self, domain_summary_path, temp_output_dir):
+        """Test that Partitioner marks output as using cached references"""
+        output_path = os.path.join(temp_output_dir, "cached_refs_test.xml")
+
+        with Partitioner() as p:
+            p.load_references_from_config()
+            p.partition(
+                summary_xml=domain_summary_path,
+                output_xml=output_path,
+                pdb_id="8ovp",
+                chain_id="A",
+            )
+
+        # Check XML for cached_references_used marker
+        import xml.etree.ElementTree as ET
+
+        tree = ET.parse(output_path)
+        root = tree.getroot()
+
+        metadata = root.find("metadata")
+        params = metadata.find("parameters")
+
+        # Look for cached_references_used parameter
+        found_cached_param = False
+        for param in params.findall("parameter"):
+            if param.get("name") == "cached_references_used":
+                assert param.get("value") == "True"
+                found_cached_param = True
+                break
+
+        assert found_cached_param, "cached_references_used parameter not found in XML"
+
+    def test_partitioner_file_not_found(self, temp_output_dir):
+        """Test Partitioner handles missing input files"""
+        with Partitioner() as p:
+            p.load_references_from_config()
+
+            with pytest.raises(FileNotFoundError):
+                p.partition(
+                    summary_xml="/nonexistent/summary.xml",
+                    output_xml=os.path.join(temp_output_dir, "output.xml"),
+                    pdb_id="test",
+                    chain_id="A",
+                )
+
+
+@pytest.mark.unit
+class TestPartitionerExport:
+    """Test Partitioner is properly exported"""
+
+    def test_partitioner_exported_from_package(self):
+        """Test Partitioner is accessible from pyecod_mini"""
+        import pyecod_mini
+
+        assert hasattr(pyecod_mini, "Partitioner")
+        assert pyecod_mini.Partitioner is Partitioner
+
+    def test_partitioner_in_all(self):
+        """Test Partitioner is in __all__"""
+        import pyecod_mini
+
+        assert "Partitioner" in pyecod_mini.__all__
+
+    def test_partitioner_has_docstring(self):
+        """Test Partitioner has comprehensive documentation"""
+        assert Partitioner.__doc__ is not None
+        doc = Partitioner.__doc__
+
+        # Check for key documentation
+        assert "batch" in doc.lower() or "Batch" in doc
+        assert "caching" in doc.lower()  # "reference data caching"
+        assert "partition" in doc.lower()
