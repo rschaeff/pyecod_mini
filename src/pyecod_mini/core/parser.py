@@ -231,8 +231,17 @@ def parse_domain_summary(
                     query_range = SequenceRange.parse(query_range_str)
                     hit_range = SequenceRange.parse(target_range_str) if target_range_str else None
 
+                    # First try to get reference_length directly from XML (preferred)
                     reference_length = None
-                    if reference_lengths:
+                    ref_len_attr = hit.get("reference_length")
+                    if ref_len_attr:
+                        try:
+                            reference_length = int(ref_len_attr)
+                        except (ValueError, TypeError):
+                            pass
+
+                    # Fall back to lookup if not in XML
+                    if reference_length is None and reference_lengths:
                         if target in reference_lengths:
                             reference_length = reference_lengths[target]
                         elif source_pdb in reference_lengths:
@@ -248,12 +257,16 @@ def parse_domain_summary(
 
                     evalue = float(hit.get("evalue", "999"))
 
+                    # Extract ECOD UID if available
+                    ecod_uid = hit.get("ecod_uid")
+
                     evidence = Evidence(
                         type="domain_blast",
                         source_pdb=source_pdb,
                         query_range=query_range,
                         domain_id=target,
                         evalue=evalue,
+                        source_domain_uid=ecod_uid,
                     )
 
                     evidence = populate_evidence_provenance(
@@ -295,8 +308,17 @@ def parse_domain_summary(
                     query_range = SequenceRange.parse(query_range_str)
                     hit_range = SequenceRange.parse(target_range_str) if target_range_str else None
 
+                    # First try to get reference_length directly from XML (preferred)
                     reference_length = None
-                    if reference_lengths:
+                    ref_len_attr = hit.get("reference_length")
+                    if ref_len_attr:
+                        try:
+                            reference_length = int(ref_len_attr)
+                        except (ValueError, TypeError):
+                            pass
+
+                    # Fall back to lookup if not in XML
+                    if reference_length is None and reference_lengths:
                         if target in reference_lengths:
                             reference_length = reference_lengths[target]
                         elif source_pdb in reference_lengths:
@@ -310,12 +332,16 @@ def parse_domain_summary(
                         skipped_counts["no_reference_length"] += 1
                         continue
 
+                    # Extract ECOD UID if available
+                    ecod_uid = hit.get("ecod_uid")
+
                     evidence = Evidence(
                         type="hhsearch",
                         source_pdb=source_pdb,
                         query_range=query_range,
                         domain_id=target,
                         evalue=float(hit.get("evalue", "999")),
+                        source_domain_uid=ecod_uid,
                     )
 
                     evidence = populate_evidence_provenance(
@@ -358,9 +384,17 @@ def parse_domain_summary(
                 if evalue < 1e-10 or evalue < 1e-5 or evalue < 0.001:
                     pass
 
-                # Get protein length for chain BLAST
+                # First try to get reference_length directly from XML (preferred)
                 reference_length = None
-                if protein_lengths:
+                ref_len_attr = hit.get("reference_length")
+                if ref_len_attr:
+                    try:
+                        reference_length = int(ref_len_attr)
+                    except (ValueError, TypeError):
+                        pass
+
+                # Fall back to protein_lengths lookup if not in XML
+                if reference_length is None and protein_lengths:
                     pdb_lower = pdb_id.lower()
                     # Try multiple lookup patterns
                     lookup_keys = [
@@ -445,9 +479,17 @@ def parse_domain_summary(
             try:
                 query_range = SequenceRange.parse(query_reg.text)
 
-                # Look up reference length
+                # First try to get reference_length directly from XML (preferred)
                 reference_length = None
-                if reference_lengths:
+                ref_len_attr = hit.get("reference_length")
+                if ref_len_attr:
+                    try:
+                        reference_length = int(ref_len_attr)
+                    except (ValueError, TypeError):
+                        pass
+
+                # Fall back to lookup if not in XML
+                if reference_length is None and reference_lengths:
                     # Try exact domain_id match first
                     if domain_id in reference_lengths:
                         reference_length = reference_lengths[domain_id]
@@ -476,6 +518,9 @@ def parse_domain_summary(
                 if evalue < 1e-10 or evalue < 1e-5:
                     pass
 
+                # Extract ECOD UID if available
+                ecod_uid = hit.get("ecod_uid")
+
                 # Create evidence with robust provenance fields
                 evidence = Evidence(
                     type="domain_blast",
@@ -483,6 +528,7 @@ def parse_domain_summary(
                     query_range=query_range,
                     domain_id=domain_id,
                     evalue=evalue,
+                    source_domain_uid=ecod_uid,
                 )
 
                 classification = {"t_group": hit.get("t_group"), "h_group": hit.get("h_group")}
@@ -535,9 +581,17 @@ def parse_domain_summary(
                 prob = float(hit.get("probability", "0"))
                 prob / 100.0 if prob > 1.0 else prob
 
-                # Look for reference length
+                # First try to get reference_length directly from XML (preferred)
                 reference_length = None
-                if reference_lengths:
+                ref_len_attr = hit.get("reference_length")
+                if ref_len_attr:
+                    try:
+                        reference_length = int(ref_len_attr)
+                    except (ValueError, TypeError):
+                        pass
+
+                # Fall back to lookup if not in XML
+                if reference_length is None and reference_lengths:
                     lookup_id = domain_id or hit_id
 
                     # Try exact domain_id/hit_id match first
@@ -562,12 +616,16 @@ def parse_domain_summary(
                 if hit_reg is not None and hit_reg.text:
                     hit_range = SequenceRange.parse(hit_reg.text)
 
+                # Extract ECOD UID if available
+                ecod_uid = hit.get("ecod_uid")
+
                 evidence = Evidence(
                     type="hhsearch",
                     source_pdb=source_pdb,
                     query_range=SequenceRange.parse(query_reg.text),
                     domain_id=domain_id,
                     evalue=float(hit.get("evalue", "999")),
+                    source_domain_uid=ecod_uid,
                 )
 
                 evidence = populate_evidence_provenance(
