@@ -37,15 +37,15 @@ class TestPackageVersion:
         assert parts[0].isdigit()
         assert parts[1].isdigit()
 
-    def test_version_is_2_0_0(self):
-        """Test that current version is 2.0.0"""
-        assert pyecod_mini.__version__ == "2.0.0"
+    def test_version_is_2_1_0(self):
+        """Test that current version is 2.1.0"""
+        assert pyecod_mini.__version__ == "2.1.0"
 
     def test_version_accessible_from_init(self):
         """Test that version is accessible from package __init__"""
         from pyecod_mini import __version__
 
-        assert __version__ == "2.0.0"
+        assert __version__ == "2.1.0"
 
 
 @pytest.mark.unit
@@ -58,7 +58,7 @@ class TestWriterVersionFunctions:
 
         # Should return package version (not git version)
         assert version == pyecod_mini.__version__
-        assert version == "2.0.0"
+        assert version == "2.1.0"
 
     def test_get_git_version_returns_string(self):
         """Test that get_git_version() always returns a string"""
@@ -100,7 +100,7 @@ class TestVersionInXMLOutput:
         # Check algorithm version attribute
         algorithm_version = version_elem.get("algorithm")
         assert algorithm_version is not None, "Algorithm version attribute not found"
-        assert algorithm_version == "2.0.0"
+        assert algorithm_version == "2.1.0"
         assert algorithm_version == pyecod_mini.__version__
 
     def test_version_consistency_in_xml(self, domain_summary_path, temp_output_dir):
@@ -164,7 +164,7 @@ class TestVersionConsistency:
         xml_version = root.find("metadata/version").get("algorithm")
 
         # All versions should match
-        assert package_version == writer_version == api_version == xml_version == "2.0.0"
+        assert package_version == writer_version == api_version == xml_version == "2.1.0"
 
     def test_version_in_all_outputs(self, domain_summary_path, temp_output_dir):
         """Test that version appears in all expected outputs"""
@@ -180,15 +180,15 @@ class TestVersionConsistency:
         )
 
         # Check result object
-        assert result.algorithm_version == "2.0.0"
+        assert result.algorithm_version == "2.1.0"
 
         # Check XML file exists and has version
         assert os.path.exists(output_path)
 
         with open(output_path, "r") as f:
             xml_content = f.read()
-            assert '2.0.0' in xml_content
-            assert 'algorithm="2.0.0"' in xml_content
+            assert '2.1.0' in xml_content
+            assert 'algorithm="2.1.0"' in xml_content
 
 
 @pytest.mark.unit
@@ -205,8 +205,8 @@ class TestVersionInMetadata:
         assert metadata.algorithm_version is None
 
         # Can be set
-        metadata.algorithm_version = "2.0.0"
-        assert metadata.algorithm_version == "2.0.0"
+        metadata.algorithm_version = "2.1.0"
+        assert metadata.algorithm_version == "2.1.0"
 
     def test_writer_sets_version_in_metadata(self, temp_output_dir):
         """Test that writer automatically sets version in metadata"""
@@ -242,7 +242,7 @@ class TestVersionInMetadata:
 
         # Metadata should now have version set
         assert metadata.algorithm_version is not None
-        assert metadata.algorithm_version == "2.0.0"
+        assert metadata.algorithm_version == "2.1.0"
 
 
 @pytest.mark.integration
@@ -261,7 +261,7 @@ class TestVersionInCLI:
         )
 
         output = result.stdout + result.stderr
-        assert "2.0.0" in output
+        assert "2.1.0" in output
         assert "pyecod-mini" in output.lower()
 
 

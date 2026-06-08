@@ -19,7 +19,7 @@ Batch Processing (recommended for multiple proteins):
             result = p.partition(summary_xml, output_xml, pdb_id, chain_id)
 """
 
-__version__ = "2.0.3"
+__version__ = "2.1.0"
 __author__ = "pyECOD Mini Development Team"
 
 # Export library API
@@ -30,6 +30,7 @@ from pyecod_mini.api import (
     PartitionResult,
     partition_protein,
 )
+from pyecod_mini.core.exclusions import ExclusionPolicy
 
 __all__ = [
     "partition_protein",
@@ -37,6 +38,7 @@ __all__ = [
     "PartitionResult",
     "PartitionError",
     "Domain",
+    "ExclusionPolicy",
     "__version__",
     "__author__",
 ]

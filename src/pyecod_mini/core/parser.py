@@ -78,6 +78,19 @@ def extract_pdb_chain_robust(
     return source_pdb, chain_id
 
 
+def _set_classification_from_hit(evidence, hit) -> None:
+    """Populate ECOD classification fields from API-spec <hit> attributes if present.
+
+    pyecod_prod summaries may emit t_group/h_group/x_group/f_group on each <hit>.
+    These enable F-group / T-group exclusion for non-circular rep validation.
+    Missing attributes are left as None (default).
+    """
+    for attr in ("t_group", "h_group", "x_group", "f_group"):
+        val = hit.get(attr)
+        if val:
+            setattr(evidence, attr, val)
+
+
 def parse_domain_summary(
     xml_path: str,
     reference_lengths: dict[str, int] = None,
@@ -205,6 +218,7 @@ def parse_domain_summary(
                     if blast_alignments and (pdb_id, chain_id) in blast_alignments:
                         evidence.alignment = blast_alignments[(pdb_id, chain_id)]
 
+                    _set_classification_from_hit(evidence, hit)
                     evidence_list.append(evidence)
                     evidence_counts["chain_blast"] += 1
 
@@ -282,6 +296,7 @@ def parse_domain_summary(
                             print(f"  Warning: Evidence validation failed: {validation_issues}")
                         continue
 
+                    _set_classification_from_hit(evidence, hit)
                     evidence_list.append(evidence)
                     evidence_counts["domain_blast"] += 1
 
@@ -365,6 +380,7 @@ def parse_domain_summary(
                             print(f"  Warning: Evidence validation failed: {validation_issues}")
                         continue
 
+                    _set_classification_from_hit(evidence, hit)
                     evidence_list.append(evidence)
                     evidence_counts["hhsearch"] += 1
 

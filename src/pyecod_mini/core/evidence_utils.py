@@ -41,8 +41,9 @@ def calculate_evidence_confidence(
     base_confidence = 0.1  # Minimum confidence for any evidence
 
     # Primary confidence from e-value (for BLAST evidence)
-    if evalue is not None and evalue > 0:
-        if evalue < 1e-10:
+    # Note: evalue == 0 means perfect match, treat as best possible
+    if evalue is not None and evalue >= 0:
+        if evalue <= 1e-10:  # Includes evalue == 0 (perfect match)
             base_confidence = 0.9
         elif evalue < 1e-8:
             base_confidence = 0.8

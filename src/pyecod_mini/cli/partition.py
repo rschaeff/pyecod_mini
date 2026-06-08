@@ -10,6 +10,11 @@ from typing import Optional
 from pyecod_mini.core.blast_parser import load_chain_blast_alignments
 from pyecod_mini.core.boundary_optimizer import BoundaryOptimizer
 from pyecod_mini.core.decomposer import load_domain_definitions
+from pyecod_mini.core.exclusions import (
+    ExclusionPolicy,
+    apply_exclusions,
+    mark_top_evidence_masked,
+)
 from pyecod_mini.core.models import DomainLayout
 from pyecod_mini.core.parser import (
     load_protein_lengths,
@@ -35,6 +40,7 @@ def partition_protein(
     summary_xml: Optional[str] = None,
     output_path: Optional[str] = None,
     blast_dir: Optional[str] = None,
+    exclusion_policy: Optional[ExclusionPolicy] = None,
 ) -> Optional[list]:
     """Partition domains for a single protein with enhanced provenance tracking
 
@@ -48,6 +54,9 @@ def partition_protein(
         output_path: Optional path to custom output XML (overrides batch detection)
         blast_dir: Optional path to directory containing BLAST XML files
                     (enables chain BLAST decomposition with alignment data)
+        exclusion_policy: Optional ExclusionPolicy to mask reference evidence
+                    (self / explicit domain ids / F-group / T-group) for
+                    non-circular validation of existing reps. Default: no exclusion.
     """
 
     try:
@@ -156,6 +165,27 @@ def partition_protein(
             verbose=verbose,
         )
 
+        # Apply evidence exclusions (self / F-group / T-group / explicit ids) for
+        # non-circular validation. No-op unless an active policy is supplied.
+        masked_evidence: list = []
+        exclusion_params: dict = {}
+        if exclusion_policy and exclusion_policy.is_active:
+            parts = protein_id.split("_")
+            q_pdb = parts[0]
+            q_chain = parts[1] if len(parts) > 1 else "A"
+            evidence, masked_evidence = apply_exclusions(
+                evidence, q_pdb, q_chain, exclusion_policy
+            )
+            exclusion_params = {
+                "exclusion_policy": exclusion_policy.describe(),
+                "evidence_items_masked": len(masked_evidence),
+                "exclude_self": exclusion_policy.exclude_self,
+            }
+            print(
+                f"Exclusion policy [{exclusion_policy.describe()}]: "
+                f"masked {len(masked_evidence)} evidence items"
+            )
+
         if not evidence:
             print("No homology evidence found - protein has 0 domains")
 
@@ -173,6 +203,7 @@ def partition_protein(
                     "boundary_optimization_enabled": False,
                 }
             )
+            metadata.process_parameters.update(exclusion_params)
 
             # Use enhanced writer even for empty results
             write_domain_partition([], metadata, str(paths["output"]))
@@ -252,6 +283,7 @@ def partition_protein(
                     "quality_filtering_rejected_all_evidence": True,
                 }
             )
+            metadata.process_parameters.update(exclusion_params)
 
             # Write valid partition XML with 0 domains
             write_domain_partition([], metadata, str(paths["output"]))
@@ -324,6 +356,12 @@ def partition_protein(
                 ),
             }
         )
+        metadata.process_parameters.update(exclusion_params)
+
+        # Flag domains whose range overlapped masked (e.g. self-hit) evidence, so
+        # reviewers can confirm the assignment came from independent evidence.
+        if masked_evidence:
+            mark_top_evidence_masked(final_domains, masked_evidence)
 
         # Use enhanced writer with comprehensive provenance
         write_domain_partition_from_layout(

@@ -15,6 +15,8 @@ Usage:
 import argparse
 import sys
 
+from pyecod_mini.core.exclusions import ExclusionPolicy, load_id_list
+
 from .config import PyEcodMiniConfig
 from .partition import analyze_protein_batches, partition_protein
 from .utils import run_test_suite, setup_references
@@ -70,6 +72,30 @@ Enhanced Features:
     )
     parser.add_argument(
         "--output", help="Path to output partition XML file (overrides batch detection)"
+    )
+
+    # Evidence exclusion (non-circular validation of existing ECOD reps)
+    parser.add_argument(
+        "--exclude-self",
+        action="store_true",
+        help="Exclude hits to the query's own structure (same PDB id) - removes the "
+        "trivial self-hit so an existing rep is validated from independent evidence",
+    )
+    parser.add_argument(
+        "--exclude-domains",
+        metavar="FILE",
+        help="File with newline-delimited reference ECOD domain ids to exclude",
+    )
+    parser.add_argument(
+        "--exclude-fgroups",
+        metavar="FILE",
+        help="File with newline-delimited F-group ids to exclude (requires summary "
+        "to carry f_group on each hit)",
+    )
+    parser.add_argument(
+        "--exclude-tgroups",
+        metavar="FILE",
+        help="File with newline-delimited T-group ids to exclude",
     )
 
     # Utility commands
@@ -180,6 +206,14 @@ Enhanced Features:
         print("\nUse --validate for more details or --setup-references to fix")
         sys.exit(1)
 
+    # Build exclusion policy from CLI flags (None unless something is excluded)
+    exclusion_policy = ExclusionPolicy(
+        exclude_self=args.exclude_self,
+        exclude_domain_ids=load_id_list(args.exclude_domains) if args.exclude_domains else frozenset(),
+        exclude_fgroups=load_id_list(args.exclude_fgroups) if args.exclude_fgroups else frozenset(),
+        exclude_tgroups=load_id_list(args.exclude_tgroups) if args.exclude_tgroups else frozenset(),
+    )
+
     # Process protein
     result = partition_protein(
         args.protein_id,
@@ -189,6 +223,7 @@ Enhanced Features:
         args.visualize,
         summary_xml=args.summary_xml,
         output_path=args.output,
+        exclusion_policy=exclusion_policy if exclusion_policy.is_active else None,
     )
 
     if result is None:
