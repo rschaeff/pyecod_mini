@@ -51,6 +51,8 @@ class Evidence:
     # Classification for better partitioning
     t_group: Optional[str] = None
     h_group: Optional[str] = None
+    x_group: Optional[str] = None
+    f_group: Optional[str] = None  # 4th-level F-group (for self/F-group exclusion)
 
     # Reference info for coverage calculation
     reference_length: Optional[int] = None
@@ -156,6 +158,10 @@ class Domain:
     # Context for provenance
     creation_timestamp: Optional[datetime] = None
     confidence_score: Optional[float] = None  # Overall domain confidence
+
+    # Non-circular validation: set when masked (e.g. self-hit) evidence overlapped
+    # this domain's range, i.e. the assignment came from independent evidence.
+    top_evidence_masked: bool = False
 
     def __post_init__(self):
         """Populate assigned_positions and set defaults during domain creation"""

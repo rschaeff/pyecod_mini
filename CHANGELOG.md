@@ -5,6 +5,23 @@ All notable changes to pyECOD Mini will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-06-08
+
+### Added — Evidence Exclusion (Non-Circular Validation)
+- **Self / F-group / T-group / domain-id exclusion** to validate existing ECOD
+  representatives without the query trivially self-matching its own reference entry.
+- Library: new keyword args on `partition_protein()` and `Partitioner.partition()`:
+  `exclude_self`, `exclude_domain_ids`, `exclude_fgroups`, `exclude_tgroups`.
+- CLI: `--exclude-self`, `--exclude-domains FILE`, `--exclude-fgroups FILE`,
+  `--exclude-tgroups FILE`.
+- `core/exclusions.py` — `ExclusionPolicy`, `apply_exclusions`,
+  `mark_top_evidence_masked`, `load_id_list` (DB-free, filters parsed evidence).
+- Parser now reads `t_group`/`h_group`/`x_group`/`f_group` from API-spec `<hit>`
+  attributes; `Evidence` gains `x_group`/`f_group` fields.
+- Output: `<metadata>` records `exclusion_policy` and `evidence_items_masked`;
+  per-`<domain>` `top_evidence_masked="true"` when masked evidence overlapped it.
+- Default behavior unchanged (exclusion is opt-in).
+
 ## [Unreleased]
 
 ### Planning Phase

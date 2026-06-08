@@ -212,6 +212,11 @@ def write_domain_partition(
         if domain.reference_ecod_domain_id:
             d_elem.set("reference_ecod_domain_id", domain.reference_ecod_domain_id)
 
+        # Non-circular validation note: masked (e.g. self-hit) evidence overlapped
+        # this domain's range, so the assignment came from independent evidence.
+        if getattr(domain, "top_evidence_masked", False):
+            d_elem.set("top_evidence_masked", "true")
+
         # ENHANCED: Primary evidence details with comprehensive metrics
         if domain.primary_evidence:
             evidence_elem = ET.SubElement(d_elem, "primary_evidence")

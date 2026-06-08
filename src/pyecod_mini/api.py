@@ -14,12 +14,37 @@ from typing import List, Optional
 import xml.etree.ElementTree as ET
 
 import pyecod_mini
+from pyecod_mini.core.exclusions import (
+    ExclusionPolicy,
+    apply_exclusions,
+    mark_top_evidence_masked,
+)
 from pyecod_mini.core.reference_cache import ReferenceCache, ReferenceData
 
 
 class PartitionError(Exception):
     """Raised when partitioning fails"""
     pass
+
+
+def _build_exclusion_policy(
+    exclude_self: bool,
+    exclude_domain_ids: Optional[List[str]],
+    exclude_fgroups: Optional[List[str]],
+    exclude_tgroups: Optional[List[str]],
+) -> Optional[ExclusionPolicy]:
+    """Build an ExclusionPolicy from API kwargs, or None if nothing is excluded.
+
+    Returns None when no exclusion is requested so existing callers and behavior
+    are completely unchanged (exclusion is opt-in).
+    """
+    policy = ExclusionPolicy(
+        exclude_self=exclude_self,
+        exclude_domain_ids=frozenset(exclude_domain_ids or ()),
+        exclude_fgroups=frozenset(exclude_fgroups or ()),
+        exclude_tgroups=frozenset(exclude_tgroups or ()),
+    )
+    return policy if policy.is_active else None
 
 
 @dataclass
@@ -54,6 +79,11 @@ def partition_protein(
     chain_id: str,
     batch_id: Optional[str] = None,
     blast_dir: Optional[str] = None,
+    *,
+    exclude_self: bool = False,
+    exclude_domain_ids: Optional[List[str]] = None,
+    exclude_fgroups: Optional[List[str]] = None,
+    exclude_tgroups: Optional[List[str]] = None,
 ) -> PartitionResult:
     """
     Partition a protein into domains using evidence from domain_summary.xml.
@@ -69,6 +99,12 @@ def partition_protein(
         batch_id: Optional batch ID for tracking
         blast_dir: Optional path to directory containing BLAST XML files
                    (enables chain BLAST decomposition with alignment data)
+        exclude_self: Drop hits to the query's own structure (same PDB id),
+                   removing the trivial self-hit that makes rep validation circular.
+        exclude_domain_ids: Drop hits to these reference ECOD domain ids.
+        exclude_fgroups: Drop hits whose F-group is in this list (requires the
+                   summary to carry f_group on each <hit>).
+        exclude_tgroups: Drop hits whose T-group is in this list.
 
     Returns:
         PartitionResult with domains, coverage, and metadata
@@ -116,6 +152,11 @@ def partition_protein(
         # Build protein ID
         protein_id = f"{pdb_id}_{chain_id}"
 
+        # Build exclusion policy (None unless an exclusion was requested)
+        exclusion_policy = _build_exclusion_policy(
+            exclude_self, exclude_domain_ids, exclude_fgroups, exclude_tgroups
+        )
+
         # Call CLI partition function with custom paths
         domains = cli_partition(
             protein_id=protein_id,
@@ -126,6 +167,7 @@ def partition_protein(
             summary_xml=summary_xml,
             output_path=output_xml,
             blast_dir=blast_dir,  # Pass BLAST directory for alignment data
+            exclusion_policy=exclusion_policy,
         )
 
         # Check if partitioning succeeded
@@ -343,6 +385,11 @@ class Partitioner:
         chain_id: str,
         batch_id: Optional[str] = None,
         blast_dir: Optional[str] = None,
+        *,
+        exclude_self: bool = False,
+        exclude_domain_ids: Optional[List[str]] = None,
+        exclude_fgroups: Optional[List[str]] = None,
+        exclude_tgroups: Optional[List[str]] = None,
     ) -> PartitionResult:
         """
         Partition a protein into domains using cached reference data.
@@ -357,6 +404,10 @@ class Partitioner:
             chain_id: Chain ID
             batch_id: Optional batch ID for tracking
             blast_dir: Optional path to directory containing BLAST XML files
+            exclude_self: Drop hits to the query's own structure (non-circular validation).
+            exclude_domain_ids: Drop hits to these reference ECOD domain ids.
+            exclude_fgroups: Drop hits whose F-group is in this list.
+            exclude_tgroups: Drop hits whose T-group is in this list.
 
         Returns:
             PartitionResult with domains, coverage, and metadata
@@ -420,6 +471,22 @@ class Partitioner:
                 verbose=self._verbose,
             )
 
+            # Apply evidence exclusions for non-circular validation (opt-in).
+            exclusion_policy = _build_exclusion_policy(
+                exclude_self, exclude_domain_ids, exclude_fgroups, exclude_tgroups
+            )
+            masked_evidence: list = []
+            exclusion_params: dict = {}
+            if exclusion_policy is not None:
+                evidence, masked_evidence = apply_exclusions(
+                    evidence, pdb_id, chain_id, exclusion_policy
+                )
+                exclusion_params = {
+                    "exclusion_policy": exclusion_policy.describe(),
+                    "evidence_items_masked": len(masked_evidence),
+                    "exclude_self": exclusion_policy.exclude_self,
+                }
+
             # Read sequence length from summary XML
             tree = ET.parse(str(summary_path))
             root = tree.getroot()
@@ -449,6 +516,7 @@ class Partitioner:
                     "boundary_optimization_enabled": False,
                     "cached_references_used": True,
                 })
+                metadata.process_parameters.update(exclusion_params)
                 write_domain_partition([], metadata, str(output_path))
 
                 self._partition_count += 1
@@ -485,6 +553,7 @@ class Partitioner:
                     "quality_filtering_rejected_all_evidence": True,
                     "cached_references_used": True,
                 })
+                metadata.process_parameters.update(exclusion_params)
                 write_domain_partition([], metadata, str(output_path))
 
                 self._partition_count += 1
@@ -527,6 +596,11 @@ class Partitioner:
                 "domains_after_optimization": len(final_domains),
                 "cached_references_used": True,
             })
+            metadata.process_parameters.update(exclusion_params)
+
+            # Flag domains whose range overlapped masked (e.g. self-hit) evidence.
+            if masked_evidence:
+                mark_top_evidence_masked(final_domains, masked_evidence)
 
             # Write output
             write_domain_partition_from_layout(
