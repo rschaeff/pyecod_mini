@@ -88,11 +88,13 @@ class TestCLIBasics:
             cwd=Path(__file__).parent.parent,
         )
 
-        # Should succeed and display version
+        # Should succeed and display the current package version
         assert result.returncode == 0
         output = result.stdout + result.stderr
-        assert "pyecod" in output.lower() or "2.0.0" in output
-        assert "2.0.0" in output  # Current version
+        from pyecod_mini import __version__
+
+        assert "pyecod" in output.lower()
+        assert __version__ in output
 
     @pytest.mark.integration
     @pytest.mark.slow
@@ -103,7 +105,7 @@ class TestCLIBasics:
             pytest.skip("No batch directory available")
 
         result = subprocess.run(
-            [sys.executable, "pyecod_mini.py", "8ovp_A", "--batch-id", "036"],
+            [sys.executable, "-m", "pyecod_mini.cli.main", "8ovp_A", "--batch-id", "036"],
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent.parent,
@@ -164,7 +166,8 @@ class TestCLICustomPaths:
         result = subprocess.run(
             [
                 sys.executable,
-                "pyecod_mini.py",
+                "-m",
+                "pyecod_mini.cli.main",
                 "8ovp_A",
                 "--summary-xml",
                 domain_summary_path,
@@ -195,7 +198,8 @@ class TestCLICustomPaths:
         result = subprocess.run(
             [
                 sys.executable,
-                "pyecod_mini.py",
+                "-m",
+                "pyecod_mini.cli.main",
                 "8ovp_A",
                 "--summary-xml",
                 domain_summary_path,
@@ -222,7 +226,8 @@ class TestCLICustomPaths:
         result = subprocess.run(
             [
                 sys.executable,
-                "pyecod_mini.py",
+                "-m",
+                "pyecod_mini.cli.main",
                 "8ovp_A",
                 "--batch-id",
                 "036",
@@ -270,7 +275,8 @@ class TestCLIIntegrationWorkflows:
         result = subprocess.run(
             [
                 sys.executable,
-                "pyecod_mini.py",
+                "-m",
+                "pyecod_mini.cli.main",
                 "8ovp_A",
                 "--summary-xml",
                 custom_input,

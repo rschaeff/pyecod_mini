@@ -88,49 +88,52 @@ class TestResidueBlocking:
 
         domains = partition_domains(evidence, sequence_length=200)
 
-        # Should select first domain (higher confidence) and possibly second if overlap is acceptable
-        assert len(domains) >= 1
-        assert domains[0].family == "test1"
+        # Coverage-first selection (see commit 760b939): the longer hit test2
+        # (50-150, 101 residues) is processed before the shorter test1
+        # (10-100, 91 residues) and blocks it from reusing the overlapping residues.
+        assert len(domains) == 1
+        assert domains[0].family == "test2"
 
     @pytest.mark.unit
     def test_coverage_thresholds(self):
-        """Test NEW_COVERAGE and OLD_COVERAGE thresholds"""
+        """Test NEW_COVERAGE and OLD_COVERAGE thresholds under coverage-first selection"""
         evidence = [
             create_complete_evidence(
                 evidence_type="domain_blast",
-                source_pdb="domain1",
-                query_range="1-100",
-                confidence=0.95,  # Highest confidence - selected first
-                reference_length=100,
-                domain_id="domain1_A",
+                source_pdb="domainA",
+                query_range="1-120",  # small (6-residue) overlap with domainB
+                confidence=0.95,
+                reference_length=120,
+                domain_id="domainA_A",
             ),
             create_complete_evidence(
                 evidence_type="domain_blast",
-                source_pdb="domain2",
-                query_range="90-200",  # 10% overlap with domain1
-                confidence=0.95,  # Second highest - should be accepted
-                reference_length=111,
-                domain_id="domain2_A",
+                source_pdb="domainB",
+                query_range="115-240",  # longest hit -> selected first
+                confidence=0.95,
+                reference_length=126,
+                domain_id="domainB_A",
             ),
             create_complete_evidence(
                 evidence_type="domain_blast",
-                source_pdb="domain3",
-                query_range="50-150",  # 50% overlap with domain1
-                confidence=0.85,  # Lowest confidence, high overlap - should be rejected
-                reference_length=101,
-                domain_id="domain3_A",
+                source_pdb="domainC",
+                query_range="60-180",  # ~55% overlap with domainB -> rejected
+                confidence=0.85,
+                reference_length=121,
+                domain_id="domainC_A",
             ),
         ]
 
         domains = partition_domains(evidence, sequence_length=250)
 
-        # Should have domain1 and domain2 (acceptable overlap)
-        # Should reject domain3 (too much overlap with domain1)
-        assert len(domains) >= 2
+        # Coverage-first picks domainB (126 residues) first. domainA's 6-residue
+        # overlap (5%) is below the 10% reuse threshold -> accepted. domainC
+        # overlaps the selected region by ~55% -> rejected.
         families = {d.family for d in domains}
-        assert "domain1" in families
-        assert "domain2" in families
-        # domain3 may or may not be included depending on overlap calculation
+        assert len(domains) == 2
+        assert "domainA" in families
+        assert "domainB" in families
+        assert "domainC" not in families
 
     @pytest.mark.unit
     def test_evidence_priority_sorting(self):
@@ -201,7 +204,9 @@ class TestResidueBlocking:
                 source_pdb="chain1",
                 query_range=SequenceRange.parse("1-50"),
                 confidence=0.95,
+                evalue=1e-20,  # without an e-value, standardization floors confidence ~0.09
                 reference_length=50,
+                hit_range=SequenceRange.parse("1-50"),
                 domain_id="chain1_A",
                 alignment=alignment,  # Required for decomposition
             ),
