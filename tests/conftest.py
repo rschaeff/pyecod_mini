@@ -16,6 +16,14 @@ import pytest
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Defensive: the deprecated sibling 'mini' package (../pyecod/mini) can leak onto
+# sys.path via a stale PYTHONPATH and shadow this repo's code. This repo has no
+# top-level 'mini' package, so drop any path entry that exposes one, keeping the
+# test suite hermetic regardless of the developer's environment.
+sys.path[:] = [
+    p for p in sys.path if not (p and (Path(p) / "mini" / "__init__.py").exists())
+]
+
 from pyecod_mini.core.blast_parser import load_chain_blast_alignments
 from pyecod_mini.core.decomposer import load_domain_definitions
 from pyecod_mini.core.models import Evidence

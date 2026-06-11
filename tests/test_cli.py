@@ -125,7 +125,7 @@ class TestBatchFinder:
     @pytest.mark.unit
     def test_batch_finder_import(self):
         """Test that BatchFinder can be imported and instantiated"""
-        from mini.pyecod_mini import BatchFinder
+        from pyecod_mini.cli.config import BatchFinder
 
         finder = BatchFinder("/tmp/test")
         assert finder.base_dir == Path("/tmp/test")
@@ -134,7 +134,7 @@ class TestBatchFinder:
     @pytest.mark.unit
     def test_config_import(self):
         """Test that PyEcodMiniConfig can be imported"""
-        from mini.pyecod_mini import PyEcodMiniConfig
+        from pyecod_mini.cli.config import PyEcodMiniConfig
 
         config = PyEcodMiniConfig()
         assert config.base_dir == Path("/data/ecod/pdb_updates/batches")
@@ -147,7 +147,8 @@ class TestMainFunctions:
     @pytest.mark.unit
     def test_partition_protein_import(self):
         """Test that main functions can be imported"""
-        from mini.pyecod_mini import analyze_protein_batches, partition_protein
+        from pyecod_mini import partition_protein
+        from pyecod_mini.cli.partition import analyze_protein_batches
 
         # Functions should exist
         assert callable(partition_protein)
@@ -300,6 +301,21 @@ class TestCLIIntegrationWorkflows:
             tree = ET.parse(custom_output)
             root = tree.getroot()
             assert root.tag == "domain_partition"
+
+
+class TestPackageHygiene:
+    """Guard against importing the deprecated sibling 'mini' package"""
+
+    @pytest.mark.unit
+    def test_old_mini_package_not_importable(self):
+        """The deprecated ../pyecod/mini package must not leak into this repo's tests.
+
+        It can be exposed via a stale PYTHONPATH; the conftest guard strips it.
+        """
+        import importlib
+
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module("mini")
 
 
 if __name__ == "__main__":

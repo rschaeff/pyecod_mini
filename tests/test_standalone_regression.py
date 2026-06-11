@@ -5,7 +5,7 @@ Standalone regression tests for manually curated domain boundaries
 These tests validate that the mini_pyecod algorithm produces
 domain boundaries that match manually curated expectations.
 
-Run from mini/ directory:
+Run from the repo root:
     python -m pytest tests/test_standalone_regression.py -v
 """
 
@@ -16,9 +16,6 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
-
-# Add paths for mini_pyecod
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "mini"))
 
 
 class TestStandaloneRegression:

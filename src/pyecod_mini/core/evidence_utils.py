@@ -37,8 +37,18 @@ def calculate_evidence_confidence(
 
     Returns:
         Confidence score between 0.05 and 0.95
+
+    Raises:
+        ValueError: if neither a (non-negative) e-value nor a probability is
+            provided. Confidence must be grounded in a real score; fabricating a
+            floor value here silently hides missing data and causes the evidence
+            to be dropped downstream with no explanation.
     """
-    base_confidence = 0.1  # Minimum confidence for any evidence
+    if (evalue is None or evalue < 0) and probability is None:
+        raise ValueError(
+            "Cannot calculate evidence confidence: no e-value or probability "
+            f"available (evidence_type={evidence_type!r}, evalue={evalue!r})"
+        )
 
     # Primary confidence from e-value (for BLAST evidence)
     # Note: evalue == 0 means perfect match, treat as best possible
@@ -61,7 +71,7 @@ def calculate_evidence_confidence(
             base_confidence = 0.2
 
     # Alternative confidence from probability (HHsearch)
-    elif probability is not None:
+    else:
         if probability > 1.0:
             # HHsearch probability is 0-100 scale, normalize to 0-1
             probability = probability / 100.0
@@ -190,13 +200,17 @@ def populate_evidence_provenance(
     if not evidence.source_chain_id:
         evidence.source_chain_id = extract_chain_id_from_evidence(evidence)
 
-    # ENHANCED: Recalculate confidence with all available information including reference coverage
-    evidence.confidence = calculate_evidence_confidence(
-        evalue=evidence.evalue,
-        evidence_type=evidence.type,
-        alignment_coverage=evidence.alignment_coverage,
-        reference_coverage=reference_coverage,
-    )
+    # Recalculate confidence from the e-value when one is available. If the
+    # evidence carries no e-value there is nothing to recompute from, so we
+    # preserve the caller-supplied confidence rather than silently overwriting it
+    # with a floor value (which would quietly drop the evidence downstream).
+    if evidence.evalue is not None:
+        evidence.confidence = calculate_evidence_confidence(
+            evalue=evidence.evalue,
+            evidence_type=evidence.type,
+            alignment_coverage=evidence.alignment_coverage,
+            reference_coverage=reference_coverage,
+        )
 
     return evidence
 
