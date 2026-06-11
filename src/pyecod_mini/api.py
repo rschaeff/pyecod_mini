@@ -84,6 +84,9 @@ def partition_protein(
     exclude_domain_ids: Optional[List[str]] = None,
     exclude_fgroups: Optional[List[str]] = None,
     exclude_tgroups: Optional[List[str]] = None,
+    domain_definitions_file: Optional[str] = None,
+    reference_lengths_file: Optional[str] = None,
+    protein_lengths_file: Optional[str] = None,
 ) -> PartitionResult:
     """
     Partition a protein into domains using evidence from domain_summary.xml.
@@ -105,6 +108,10 @@ def partition_protein(
         exclude_fgroups: Drop hits whose F-group is in this list (requires the
                    summary to carry f_group on each <hit>).
         exclude_tgroups: Drop hits whose T-group is in this list.
+        domain_definitions_file: Override path to the domain definitions CSV
+                   (selects an ECOD version's reference data; default: bundled).
+        reference_lengths_file: Override path to the domain lengths CSV.
+        protein_lengths_file: Override path to the protein lengths CSV.
 
     Returns:
         PartitionResult with domains, coverage, and metadata
@@ -140,10 +147,15 @@ def partition_protein(
     except ImportError as e:
         raise PartitionError(f"Failed to import pyecod_mini internals: {e}") from e
 
-    # Create minimal config for library API
-    # Note: This uses default paths for reference data
+    # Create config for library API. Reference-file overrides (when supplied by
+    # the caller, e.g. pyecod_prod's reference registry) select a specific ECOD
+    # version's reference data; otherwise the bundled test_data defaults are used.
     try:
-        config = PyEcodMiniConfig()
+        config = PyEcodMiniConfig(
+            domain_definitions_file=domain_definitions_file,
+            reference_lengths_file=reference_lengths_file,
+            protein_lengths_file=protein_lengths_file,
+        )
     except Exception as e:
         raise PartitionError(f"Failed to initialize pyecod_mini config: {e}") from e
 

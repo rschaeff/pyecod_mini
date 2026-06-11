@@ -138,7 +138,21 @@ class BatchFinder:
 class PyEcodMiniConfig:
     """Configuration manager with integrated batch detection"""
 
-    def __init__(self):
+    def __init__(
+        self,
+        domain_definitions_file=None,
+        reference_lengths_file=None,
+        protein_lengths_file=None,
+        reference_blacklist_file=None,
+    ):
+        """Configuration manager.
+
+        Reference-file overrides (all optional) let a caller point pyecod_mini at a
+        specific ECOD version's reference data instead of the bundled test_data
+        defaults. pyecod_prod supplies these from its reference registry so the
+        partitioner uses the same ECOD version as the rest of the pipeline. When an
+        override is None, the bundled test_data default is used (unchanged behavior).
+        """
         # Try to find project root (look for pyproject.toml)
         current_dir = Path(__file__).parent
         project_root = None
@@ -154,11 +168,28 @@ class PyEcodMiniConfig:
         self.test_data_dir = project_root / "test_data"
         self.output_dir = Path("/tmp")
 
-        # Default reference files
-        self.domain_lengths_file = self.test_data_dir / "domain_lengths.csv"
-        self.protein_lengths_file = self.test_data_dir / "protein_lengths.csv"
-        self.domain_definitions_file = self.test_data_dir / "domain_definitions.csv"
-        self.reference_blacklist_file = self.test_data_dir / "reference_blacklist.csv"
+        # Default reference files (bundled test_data), overridable by the caller
+        # so pyecod_prod can select a specific ECOD version's reference data.
+        self.domain_lengths_file = (
+            Path(reference_lengths_file)
+            if reference_lengths_file
+            else self.test_data_dir / "domain_lengths.csv"
+        )
+        self.protein_lengths_file = (
+            Path(protein_lengths_file)
+            if protein_lengths_file
+            else self.test_data_dir / "protein_lengths.csv"
+        )
+        self.domain_definitions_file = (
+            Path(domain_definitions_file)
+            if domain_definitions_file
+            else self.test_data_dir / "domain_definitions.csv"
+        )
+        self.reference_blacklist_file = (
+            Path(reference_blacklist_file)
+            if reference_blacklist_file
+            else self.test_data_dir / "reference_blacklist.csv"
+        )
 
         # Batch finder
         self.batch_finder = BatchFinder(str(self.base_dir))
