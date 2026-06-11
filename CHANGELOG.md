@@ -5,6 +5,15 @@ All notable changes to pyECOD Mini will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-06-11
+
+### Added — Reference-file overrides (versioned reference data)
+- `partition_protein()` and `PyEcodMiniConfig` accept optional
+  `domain_definitions_file` / `reference_lengths_file` / `protein_lengths_file`
+  overrides, so a caller (pyecod_prod's reference registry) can point the
+  partitioner at a specific ECOD version's reference CSVs instead of the bundled
+  test_data defaults. Default behavior unchanged when overrides are None.
+
 ## [2.1.0] - 2026-06-08
 
 ### Added — Evidence Exclusion (Non-Circular Validation)
